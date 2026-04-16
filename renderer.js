@@ -623,6 +623,16 @@ async function openDetailPanel(symbol) {
   renderDetailBody(data);
 }
 
+function renderBreakoutWindow(w) {
+  if (!w) return '';
+  const range = w.max ? `${w.min}-${w.max} days` : `${w.min}+ days`;
+  const extras = [];
+  if (w.note) extras.push(w.note);
+  if (w.near52w) extras.push('near 52w high');
+  const extraText = extras.length ? ` (${extras.join(', ')})` : '';
+  return `<div class="breakout-prob" style="margin-top:2px;">Estimated breakout window: ${range}${extraText}</div>`;
+}
+
 function renderDetailBody(d) {
   const maxScore = d.maxScore || 100;
   const scorePct = (d.score / maxScore) * 100;
@@ -693,6 +703,7 @@ function renderDetailBody(d) {
         <div>
           <div class="score-label ${scoreClass}">${scoreLabel}</div>
           <div class="breakout-prob">Breakout probability: ${breakoutProb}%</div>
+          ${renderBreakoutWindow(d.breakoutWindow)}
           ${d.isETF ? '<div class="breakout-prob" style="margin-top:2px;">ETF (no fundamentals)</div>' : ''}
         </div>
       </div>

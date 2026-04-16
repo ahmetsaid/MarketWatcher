@@ -493,17 +493,51 @@ ipcMain.handle('fetch-details', async (_event, symbol) => {
     };
     const { score, breakdown, maxScore } = computeScore(scoreData, isETF);
 
+    // Estimated breakout window (days)
+    const momTotal = breakdown.momentum.reduce((s, i) => s + i.pts, 0);
+    let breakoutWindow = null;
+    if (momTotal >= 30) {
+      if (rsi != null && rsi > 80) breakoutWindow = { min: 10, max: 20, note: 'correction likely first' };
+      else if (rsi != null && rsi < 75) breakoutWindow = { min: 5, max: 10, note: null };
+      else breakoutWindow = { min: 5, max: 15, note: null };
+    } else if (momTotal >= 20) {
+      breakoutWindow = { min: 20, max: 35, note: null };
+    } else {
+      breakoutWindow = { min: 35, max: null, note: null };
+    }
+
+    // Near 52w high → halve the window
+    if (breakoutWindow && fiftyTwoWeekHigh && price && (price / fiftyTwoWeekHigh) >= 0.99) {
+      breakoutWindow.min = Math.max(1, Math.round(breakoutWindow.min / 2));
+      if (breakoutWindow.max) breakoutWindow.max = Math.max(2, Math.round(breakoutWindow.max / 2));
+      breakoutWindow.near52w = true;
+    }
+
+    // Get actual daily change from a separate 1d chart call (1y meta gives year-ago prevClose)
+    let dailyChange = 0, dailyChangePct = 0;
+    try {
+      const dailyUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+      const daily = await fetchJSON(dailyUrl);
+      const dm = daily.chart.result[0].meta;
+      const prev = dm.previousClose || dm.chartPreviousClose;
+      if (prev) {
+        dailyChange = dm.regularMarketPrice - prev;
+        dailyChangePct = (dailyChange / prev) * 100;
+      }
+    } catch { /* fallback to 0 */ }
+
     return {
       symbol,
       longName,
       quoteType,
       isETF,
       price,
-      change: price - (meta.previousClose || meta.chartPreviousClose || price),
-      changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0,
+      change: dailyChange,
+      changePercent: dailyChangePct,
       score,
       maxScore,
       breakdown,
+      breakoutWindow,
       stats: {
         forwardPE, trailingPE, fiftyTwoWeekHigh, fiftyTwoWeekLow,
         avgVolume, volume, rsi, sma50, targetMeanPrice,
