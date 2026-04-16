@@ -338,15 +338,15 @@ function computeScore(d, isETF = false) {
   if (d.fiftyTwoWeekHigh && d.price) {
     const ratio = d.price / d.fiftyTwoWeekHigh;
     const ok = ratio >= 0.90;
-    breakdown.technical.push({ label: '52w High yakin', pts: ok ? 10 : 0, max: 10 });
+    breakdown.technical.push({ label: 'Near 52w High', pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
-  } else breakdown.technical.push({ label: '52w High yakin', pts: 0, max: 10, na: true });
+  } else breakdown.technical.push({ label: 'Near 52w High', pts: 0, max: 10, na: true });
 
   if (d.sma50 != null && d.price) {
     const ok = d.price > d.sma50;
-    breakdown.technical.push({ label: '50d MA ustunde', pts: ok ? 10 : 0, max: 10 });
+    breakdown.technical.push({ label: 'Above 50d MA', pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
-  } else breakdown.technical.push({ label: '50d MA ustunde', pts: 0, max: 10, na: true });
+  } else breakdown.technical.push({ label: 'Above 50d MA', pts: 0, max: 10, na: true });
 
   if (d.rsi != null) {
     const ok = d.rsi >= 50 && d.rsi <= 70;
@@ -356,17 +356,17 @@ function computeScore(d, isETF = false) {
 
   if (d.avgVolume && d.volume) {
     const ok = d.volume > d.avgVolume;
-    breakdown.technical.push({ label: 'Hacim ort. ustunde', pts: ok ? 10 : 0, max: 10 });
+    breakdown.technical.push({ label: 'Volume above avg', pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
-  } else breakdown.technical.push({ label: 'Hacim ort. ustunde', pts: 0, max: 10, na: true });
+  } else breakdown.technical.push({ label: 'Volume above avg', pts: 0, max: 10, na: true });
 
   // FUNDAMENTAL (30 pts) - skip for ETFs
   if (!isETF) {
     if (d.targetMeanPrice && d.price) {
       const ok = d.targetMeanPrice > d.price;
-      breakdown.fundamental.push({ label: 'Analist hedefi >', pts: ok ? 10 : 0, max: 10 });
+      breakdown.fundamental.push({ label: 'Analyst target >', pts: ok ? 10 : 0, max: 10 });
       if (ok) score += 10;
-    } else breakdown.fundamental.push({ label: 'Analist hedefi >', pts: 0, max: 10, na: true });
+    } else breakdown.fundamental.push({ label: 'Analyst target >', pts: 0, max: 10, na: true });
 
     if (d.forwardPE != null) {
       const ok = d.forwardPE > 0 && d.forwardPE < 40;
@@ -376,29 +376,29 @@ function computeScore(d, isETF = false) {
 
     if (d.epsGrowth != null) {
       const ok = d.epsGrowth > 0;
-      breakdown.fundamental.push({ label: `EPS buyumesi + (${(d.epsGrowth * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
+      breakdown.fundamental.push({ label: `EPS growth + (${(d.epsGrowth * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
       if (ok) score += 10;
-    } else breakdown.fundamental.push({ label: 'EPS buyumesi +', pts: 0, max: 10, na: true });
+    } else breakdown.fundamental.push({ label: 'EPS growth +', pts: 0, max: 10, na: true });
   }
 
   // MOMENTUM (30 pts)
   if (d.return1m != null) {
     const ok = d.return1m > 0;
-    breakdown.momentum.push({ label: `1A getiri (${(d.return1m * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
+    breakdown.momentum.push({ label: `1M return (${(d.return1m * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
-  } else breakdown.momentum.push({ label: '1A getiri +', pts: 0, max: 10, na: true });
+  } else breakdown.momentum.push({ label: '1M return +', pts: 0, max: 10, na: true });
 
   if (d.return3m != null) {
     const ok = d.return3m > 0;
-    breakdown.momentum.push({ label: `3A getiri (${(d.return3m * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
+    breakdown.momentum.push({ label: `3M return (${(d.return3m * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
-  } else breakdown.momentum.push({ label: '3A getiri +', pts: 0, max: 10, na: true });
+  } else breakdown.momentum.push({ label: '3M return +', pts: 0, max: 10, na: true });
 
   if (d.returnYtd != null) {
     const ok = d.returnYtd > 0;
-    breakdown.momentum.push({ label: `YTD getiri (${(d.returnYtd * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
+    breakdown.momentum.push({ label: `YTD return (${(d.returnYtd * 100).toFixed(1)}%)`, pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
-  } else breakdown.momentum.push({ label: 'YTD getiri +', pts: 0, max: 10, na: true });
+  } else breakdown.momentum.push({ label: 'YTD return +', pts: 0, max: 10, na: true });
 
   return { score, breakdown, maxScore };
 }

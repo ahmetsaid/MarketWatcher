@@ -626,7 +626,7 @@ async function openDetailPanel(symbol) {
 function renderDetailBody(d) {
   const maxScore = d.maxScore || 100;
   const scorePct = (d.score / maxScore) * 100;
-  const scoreTR = scorePct >= 70 ? 'GUCLU' : scorePct >= 40 ? 'NOTR' : 'ZAYIF';
+  const scoreLabel = scorePct >= 70 ? 'STRONG' : scorePct >= 40 ? 'NEUTRAL' : 'WEAK';
   const scoreClass = scorePct >= 70 ? 'strong' : scorePct >= 40 ? 'neutral' : 'weak';
   const breakoutProb = Math.round(scorePct);
 
@@ -666,7 +666,7 @@ function renderDetailBody(d) {
 
   const newsHtml = d.news && d.news.length ? `
     <div class="news-list">
-      <div class="news-title">Son Haberler</div>
+      <div class="news-title">Latest News</div>
       ${d.news.map(n => `
         <div class="news-item" data-link="${n.link}">
           <div class="news-headline">${n.title}</div>
@@ -691,13 +691,13 @@ function renderDetailBody(d) {
           </div>
         </div>
         <div>
-          <div class="score-label ${scoreClass}">${scoreTR}</div>
-          <div class="breakout-prob">Kirilim olasiligi: ~${breakoutProb}%</div>
-          ${d.isETF ? '<div class="breakout-prob" style="margin-top:2px;">ETF (fundamental yok)</div>' : ''}
+          <div class="score-label ${scoreClass}">${scoreLabel}</div>
+          <div class="breakout-prob">Breakout probability: ${breakoutProb}%</div>
+          ${d.isETF ? '<div class="breakout-prob" style="margin-top:2px;">ETF (no fundamentals)</div>' : ''}
         </div>
       </div>
       <div class="score-bar"><div class="score-bar-fill ${scoreClass}" style="width:${scorePct}%;"></div></div>
-      ${groupHtml('Teknik', techTotal, 40, d.breakdown.technical)}
+      ${groupHtml('Technical', techTotal, 40, d.breakdown.technical)}
       ${d.isETF ? '' : groupHtml('Fundamental', fundTotal, 30, d.breakdown.fundamental)}
       ${groupHtml('Momentum', momTotal, 30, d.breakdown.momentum)}
     </div>
@@ -706,6 +706,11 @@ function renderDetailBody(d) {
     ${statsHtml}
 
     ${newsHtml}
+
+    <div class="detail-footer-actions">
+      <button class="btn-small btn-detail-alert" data-symbol="${d.symbol}">Set Alert</button>
+      <button class="btn-small danger btn-detail-remove" data-symbol="${d.symbol}">&times; Remove Symbol</button>
+    </div>
   `;
 
   // Wire news clicks
@@ -715,6 +720,30 @@ function renderDetailBody(d) {
       if (link) window.api.openExternal(link);
     });
   });
+
+  // Remove button
+  const removeBtn = detailBodyEl.querySelector('.btn-detail-remove');
+  if (removeBtn) {
+    removeBtn.addEventListener('click', async () => {
+      const sym = removeBtn.dataset.symbol;
+      const idx = portfolio.positions.findIndex(p => p.symbol === sym);
+      if (idx === -1) return;
+      closeDetailPanel();
+      await removePosition(idx);
+    });
+  }
+
+  // Alert button (opens inline expanded view below the row)
+  const alertBtn = detailBodyEl.querySelector('.btn-detail-alert');
+  if (alertBtn) {
+    alertBtn.addEventListener('click', () => {
+      const sym = alertBtn.dataset.symbol;
+      expandedSymbol = sym;
+      alertFormSymbol = sym;
+      closeDetailPanel();
+      render();
+    });
+  }
 }
 
 // Close panel on Escape
