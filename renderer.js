@@ -694,12 +694,20 @@ function renderDetailBody(d) {
         <span>${title}</span>
         <span>${total}/${max}</span>
       </div>
-      ${items.map(i => `
-        <div class="score-item">
-          <span class="score-item-label ${i.na ? 'na' : ''}">${i.label}${i.na ? ' (N/A)' : ''}</span>
-          <span class="score-item-pts ${i.pts > 0 ? 'got' : 'miss'}">${i.pts > 0 ? '+' : ''}${i.pts}</span>
-        </div>
-      `).join('')}
+      ${items.map(i => {
+        if (i.info) return `
+          <div class="score-item">
+            <span class="score-item-label" style="color:var(--text-dim);">${i.label}</span>
+            <span class="score-item-pts" style="color:var(--text-dim);">info</span>
+          </div>
+        `;
+        return `
+          <div class="score-item">
+            <span class="score-item-label ${i.na ? 'na' : ''}">${i.label}${i.na ? ' (N/A)' : ''}</span>
+            <span class="score-item-pts ${i.pts > 0 ? 'got' : 'miss'}">${i.pts > 0 ? '+' : ''}${i.pts}</span>
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 
@@ -752,7 +760,7 @@ function renderDetailBody(d) {
         </div>
       </div>
       <div class="score-bar"><div class="score-bar-fill ${scoreClass}" style="width:${scorePct}%;"></div></div>
-      ${groupHtml('Technical', techTotal, 50, d.breakdown.technical)}
+      ${groupHtml('Technical', techTotal, 40, d.breakdown.technical)}
       ${d.isETF ? '' : groupHtml('Fundamental', fundTotal, 30, d.breakdown.fundamental)}
       ${groupHtml('Momentum', momTotal, 30, d.breakdown.momentum)}
     </div>

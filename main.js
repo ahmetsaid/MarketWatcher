@@ -361,8 +361,7 @@ function calcIchimoku(highs, lows, closes) {
 function computeScore(d, isETF = false) {
   const breakdown = { technical: [], fundamental: [], momentum: [] };
   let score = 0;
-  // Technical now has +10 extra from Ichimoku
-  const maxScore = isETF ? 80 : 110;
+  const maxScore = isETF ? 70 : 100;
 
   // TECHNICAL (40 pts)
   if (d.fiftyTwoWeekHigh && d.price) {
@@ -378,34 +377,35 @@ function computeScore(d, isETF = false) {
     if (ok) score += 10;
   } else breakdown.technical.push({ label: 'Above 50d MA', pts: 0, max: 10, na: true });
 
-  if (d.rsi != null) {
-    const ok = d.rsi >= 50 && d.rsi <= 70;
-    breakdown.technical.push({ label: `RSI 50-70 (${d.rsi.toFixed(0)})`, pts: ok ? 10 : 0, max: 10 });
-    if (ok) score += 10;
-  } else breakdown.technical.push({ label: 'RSI 50-70', pts: 0, max: 10, na: true });
-
   if (d.avgVolume && d.volume) {
     const ok = d.volume > d.avgVolume;
     breakdown.technical.push({ label: 'Volume above avg', pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
   } else breakdown.technical.push({ label: 'Volume above avg', pts: 0, max: 10, na: true });
 
-  // Ichimoku (10 pts)
+  // RSI (5 pts) - shares 10pt slot with Ichimoku
+  if (d.rsi != null) {
+    const ok = d.rsi >= 50 && d.rsi <= 70;
+    breakdown.technical.push({ label: `RSI 50-70 (${d.rsi.toFixed(0)})`, pts: ok ? 5 : 0, max: 5 });
+    if (ok) score += 5;
+  } else breakdown.technical.push({ label: 'RSI 50-70', pts: 0, max: 5, na: true });
+
+  // Ichimoku (5 pts) - shares 10pt slot with RSI
   if (d.ichimoku) {
     const ich = d.ichimoku;
     let pts = 0, label;
     if (ich.position === 'above' && ich.bullishSignal) {
-      pts = 10; label = 'Ichimoku: above cloud (strong)';
+      pts = 5; label = 'Ichimoku: above cloud (strong)';
     } else if (ich.position === 'above') {
-      pts = 7; label = 'Ichimoku: above cloud';
+      pts = 4; label = 'Ichimoku: above cloud';
     } else if (ich.position === 'inside') {
-      pts = 3; label = 'Ichimoku: inside cloud';
+      pts = 2; label = 'Ichimoku: inside cloud';
     } else {
       pts = 0; label = 'Ichimoku: below cloud';
     }
-    breakdown.technical.push({ label, pts, max: 10 });
+    breakdown.technical.push({ label, pts, max: 5 });
     score += pts;
-  } else breakdown.technical.push({ label: 'Ichimoku cloud', pts: 0, max: 10, na: true });
+  } else breakdown.technical.push({ label: 'Ichimoku cloud', pts: 0, max: 5, na: true });
 
   // FUNDAMENTAL (30 pts) - skip for ETFs
   if (!isETF) {
