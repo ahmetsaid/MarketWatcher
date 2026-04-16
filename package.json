@@ -1,0 +1,39 @@
+{
+  "name": "market-tracker",
+  "version": "1.0.0",
+  "description": "Desktop portfolio tracker widget",
+  "main": "main.js",
+  "author": "MarketTracker",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.markettracker.app",
+    "productName": "Market Tracker",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "portfolio.json",
+      "settings.json"
+    ],
+    "extraResources": []
+  },
+  "dependencies": {
+    "yahoo-finance2": "^2.14.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

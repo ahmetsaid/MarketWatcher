@@ -1,0 +1,58 @@
+{
+  "positions": [
+    {
+      "symbol": "QQQ",
+      "shares": 10,
+      "avgCost": 380,
+      "alerts": []
+    },
+    {
+      "symbol": "SOXL",
+      "shares": 50,
+      "avgCost": 25,
+      "alerts": []
+    },
+    {
+      "symbol": "SMH",
+      "shares": 15,
+      "avgCost": 220,
+      "alerts": []
+    },
+    {
+      "symbol": "NVDA",
+      "shares": 20,
+      "avgCost": 450,
+      "alerts": []
+    },
+    {
+      "symbol": "MSTU",
+      "shares": 0,
+      "avgCost": 0,
+      "alerts": []
+    },
+    {
+      "symbol": "BTC-USD",
+      "shares": 0.5,
+      "avgCost": 42000,
+      "alerts": []
+    },
+    {
+      "symbol": "GC=F",
+      "shares": 0,
+      "avgCost": 0,
+      "alerts": []
+    },
+    {
+      "symbol": "USDTRY=X",
+      "shares": 0,
+      "avgCost": 0,
+      "alerts": []
+    },
+    {
+      "symbol": "XU100.IS",
+      "shares": 0,
+      "avgCost": 0,
+      "alerts": []
+    }
+  ]
+}

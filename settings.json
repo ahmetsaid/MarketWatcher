@@ -1,0 +1,9 @@
+{
+  "refreshInterval": 30,
+  "notifications": true,
+  "alertSound": true,
+  "alertVolume": 30,
+  "fontSize": "medium",
+  "compactMode": false,
+  "theme": "tradingview"
+}
