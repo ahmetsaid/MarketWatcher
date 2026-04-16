@@ -329,10 +329,40 @@ function calcSMA(closes, period) {
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
+function calcIchimoku(highs, lows, closes) {
+  if (highs.length < 52 || lows.length < 52) return null;
+  const hhll = (arr, period) => {
+    const slice = arr.slice(-period);
+    return { high: Math.max(...slice), low: Math.min(...slice) };
+  };
+  const h9 = hhll(highs, 9), l9 = hhll(lows, 9);
+  const tenkan = (h9.high + l9.low) / 2;
+  const h26 = hhll(highs, 26), l26 = hhll(lows, 26);
+  const kijun = (h26.high + l26.low) / 2;
+  const senkouA = (tenkan + kijun) / 2;
+  const h52 = hhll(highs, 52), l52 = hhll(lows, 52);
+  const senkouB = (h52.high + l52.low) / 2;
+  const price = closes[closes.length - 1];
+  const cloudTop = Math.max(senkouA, senkouB);
+  const cloudBottom = Math.min(senkouA, senkouB);
+  let position, bullishSignal = false;
+  if (price > cloudTop) {
+    position = 'above';
+    // Extra bullish if Tenkan > Kijun and price above Tenkan
+    if (tenkan > kijun && price > tenkan) bullishSignal = true;
+  } else if (price < cloudBottom) {
+    position = 'below';
+  } else {
+    position = 'inside';
+  }
+  return { tenkan, kijun, senkouA, senkouB, position, bullishSignal, cloudTop, cloudBottom };
+}
+
 function computeScore(d, isETF = false) {
   const breakdown = { technical: [], fundamental: [], momentum: [] };
   let score = 0;
-  const maxScore = isETF ? 70 : 100;
+  // Technical now has +10 extra from Ichimoku
+  const maxScore = isETF ? 80 : 110;
 
   // TECHNICAL (40 pts)
   if (d.fiftyTwoWeekHigh && d.price) {
@@ -359,6 +389,23 @@ function computeScore(d, isETF = false) {
     breakdown.technical.push({ label: 'Volume above avg', pts: ok ? 10 : 0, max: 10 });
     if (ok) score += 10;
   } else breakdown.technical.push({ label: 'Volume above avg', pts: 0, max: 10, na: true });
+
+  // Ichimoku (10 pts)
+  if (d.ichimoku) {
+    const ich = d.ichimoku;
+    let pts = 0, label;
+    if (ich.position === 'above' && ich.bullishSignal) {
+      pts = 10; label = 'Ichimoku: above cloud (strong)';
+    } else if (ich.position === 'above') {
+      pts = 7; label = 'Ichimoku: above cloud';
+    } else if (ich.position === 'inside') {
+      pts = 3; label = 'Ichimoku: inside cloud';
+    } else {
+      pts = 0; label = 'Ichimoku: below cloud';
+    }
+    breakdown.technical.push({ label, pts, max: 10 });
+    score += pts;
+  } else breakdown.technical.push({ label: 'Ichimoku cloud', pts: 0, max: 10, na: true });
 
   // FUNDAMENTAL (30 pts) - skip for ETFs
   if (!isETF) {
@@ -410,7 +457,12 @@ ipcMain.handle('fetch-details', async (_event, symbol) => {
     const chartData = await fetchJSON(chartUrl);
     const meta = chartData.chart.result[0].meta;
     const timestamps = chartData.chart.result[0].timestamp || [];
-    const closes = (chartData.chart.result[0].indicators.quote[0].close || []).filter(c => c != null);
+    const rawCloses = chartData.chart.result[0].indicators.quote[0].close || [];
+    const rawHighs = chartData.chart.result[0].indicators.quote[0].high || [];
+    const rawLows = chartData.chart.result[0].indicators.quote[0].low || [];
+    const closes = rawCloses.filter(c => c != null);
+    const highs = rawHighs.filter(h => h != null);
+    const lows = rawLows.filter(l => l != null);
     const volumes = chartData.chart.result[0].indicators.quote[0].volume || [];
 
     const price = meta.regularMarketPrice;
@@ -420,6 +472,7 @@ ipcMain.handle('fetch-details', async (_event, symbol) => {
 
     const sma50 = calcSMA(closes, 50);
     const rsi = calcRSI(closes, 14);
+    const ichimoku = calcIchimoku(highs, lows, closes);
 
     // Avg volume over last 30 days
     const recentVol = volumes.filter(v => v != null).slice(-30);
@@ -486,9 +539,77 @@ ipcMain.handle('fetch-details', async (_event, symbol) => {
       }
     } catch { /* news unavailable */ }
 
+    // 4. Options chain summary (for CC/CSP decisions)
+    let options = null;
+    try {
+      const opt = await fetchJSONAuth(`https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`);
+      const oc = opt.optionChain && opt.optionChain.result && opt.optionChain.result[0];
+      if (oc && oc.options && oc.options.length) {
+        const expDates = oc.expirationDates || [];
+        const under = oc.quote.regularMarketPrice;
+        const chain = oc.options[0];
+        const exp = chain.expirationDate;
+        const calls = chain.calls || [];
+        const puts = chain.puts || [];
+
+        const findATM = (arr) => arr.length
+          ? arr.reduce((best, c) => Math.abs(c.strike - under) < Math.abs(best.strike - under) ? c : best)
+          : null;
+        // Nearest OTM call >= 5% above price (Covered Call target)
+        const ccTarget = under * 1.05;
+        const ccCall = calls.filter(c => c.strike >= ccTarget).sort((a, b) => a.strike - b.strike)[0]
+                    || calls.sort((a, b) => b.strike - a.strike)[0];
+        // Nearest OTM put <= 5% below price (CSP target)
+        const cspTarget = under * 0.95;
+        const cspPut = puts.filter(p => p.strike <= cspTarget).sort((a, b) => b.strike - a.strike)[0]
+                    || puts.sort((a, b) => a.strike - b.strike)[0];
+
+        const atmCall = findATM(calls);
+        const atmPut = findATM(puts);
+
+        // Volume-weighted put/call ratio
+        const callVol = calls.reduce((s, c) => s + (c.volume || 0), 0);
+        const putVol = puts.reduce((s, p) => s + (p.volume || 0), 0);
+        const pcRatio = callVol > 0 ? putVol / callVol : null;
+
+        // IV from ATM
+        const iv = atmCall && atmCall.impliedVolatility ? atmCall.impliedVolatility * 100 : null;
+
+        const fmtOpt = (o) => o ? {
+          strike: o.strike,
+          bid: o.bid,
+          ask: o.ask,
+          last: o.lastPrice,
+          volume: o.volume || 0,
+          openInterest: o.openInterest || 0,
+          iv: o.impliedVolatility ? o.impliedVolatility * 100 : null,
+        } : null;
+
+        // Estimated % return for CC and CSP (annualized)
+        const daysToExp = Math.max(1, Math.round((exp - Date.now() / 1000) / 86400));
+        const ccReturn = ccCall && ccCall.bid > 0 ? (ccCall.bid / under) * (365 / daysToExp) * 100 : null;
+        const cspReturn = cspPut && cspPut.bid > 0 ? (cspPut.bid / cspPut.strike) * (365 / daysToExp) * 100 : null;
+
+        options = {
+          expiration: exp,
+          daysToExp,
+          underlying: under,
+          iv,
+          pcRatio,
+          atmCall: fmtOpt(atmCall),
+          atmPut: fmtOpt(atmPut),
+          ccCall: fmtOpt(ccCall),
+          cspPut: fmtOpt(cspPut),
+          ccAnnualReturn: ccReturn,
+          cspAnnualReturn: cspReturn,
+          expirationCount: expDates.length,
+        };
+      }
+    } catch { /* options unavailable (not all symbols have options) */ }
+
     const scoreData = {
       price, fiftyTwoWeekHigh, fiftyTwoWeekLow, volume, avgVolume,
-      sma50, rsi, forwardPE, targetMeanPrice, epsGrowth,
+      sma50, rsi, ichimoku, forwardPE, targetMeanPrice, epsGrowth,
       return1m, return3m, returnYtd,
     };
     const { score, breakdown, maxScore } = computeScore(scoreData, isETF);
@@ -540,9 +661,10 @@ ipcMain.handle('fetch-details', async (_event, symbol) => {
       breakoutWindow,
       stats: {
         forwardPE, trailingPE, fiftyTwoWeekHigh, fiftyTwoWeekLow,
-        avgVolume, volume, rsi, sma50, targetMeanPrice,
+        avgVolume, volume, rsi, sma50, targetMeanPrice, ichimoku,
       },
       news,
+      options,
     };
   } catch (err) {
     return { error: err.message };

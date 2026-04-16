@@ -623,6 +623,50 @@ async function openDetailPanel(symbol) {
   renderDetailBody(data);
 }
 
+function renderOptions(opt) {
+  if (!opt) return '';
+  const expDate = new Date(opt.expiration * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const iv = opt.iv != null ? opt.iv.toFixed(1) + '%' : '--';
+  const pcr = opt.pcRatio != null ? opt.pcRatio.toFixed(2) : '--';
+
+  const strategyHtml = (title, o, annualReturn, subtitle) => {
+    if (!o) return '';
+    const annual = annualReturn != null ? `<span class="annual">${annualReturn.toFixed(1)}%/yr</span>` : '';
+    return `
+      <div class="opt-strategy">
+        <div class="opt-strategy-title">
+          <span>${title} <span style="color:var(--text-dim);font-size:10px;font-weight:400;">${subtitle}</span></span>
+          ${annual}
+        </div>
+        <div class="opt-strategy-details">
+          <div><label>Strike</label><span>${fmt(o.strike)}</span></div>
+          <div><label>Bid</label><span>${fmt(o.bid)}</span></div>
+          <div><label>Ask</label><span>${fmt(o.ask)}</span></div>
+          <div><label>IV</label><span>${o.iv != null ? o.iv.toFixed(0) + '%' : '--'}</span></div>
+          <div><label>Vol</label><span>${fmtLargeNum(o.volume)}</span></div>
+          <div><label>OI</label><span>${fmtLargeNum(o.openInterest)}</span></div>
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="options-card">
+      <div class="options-header">
+        <span class="options-header-left">Options Summary</span>
+        <span class="options-exp">Exp: ${expDate} (${opt.daysToExp}d)</span>
+      </div>
+      <div class="options-meta">
+        <span>IV <strong>${iv}</strong></span>
+        <span>P/C Ratio <strong>${pcr}</strong></span>
+        <span>${opt.expirationCount} expirations</span>
+      </div>
+      ${strategyHtml('Covered Call', opt.ccCall, opt.ccAnnualReturn, '(5% OTM)')}
+      ${strategyHtml('Cash Secured Put', opt.cspPut, opt.cspAnnualReturn, '(5% OTM)')}
+    </div>
+  `;
+}
+
 function renderBreakoutWindow(w) {
   if (!w) return '';
   const range = w.max ? `${w.min}-${w.max} days` : `${w.min}+ days`;
@@ -708,13 +752,15 @@ function renderDetailBody(d) {
         </div>
       </div>
       <div class="score-bar"><div class="score-bar-fill ${scoreClass}" style="width:${scorePct}%;"></div></div>
-      ${groupHtml('Technical', techTotal, 40, d.breakdown.technical)}
+      ${groupHtml('Technical', techTotal, 50, d.breakdown.technical)}
       ${d.isETF ? '' : groupHtml('Fundamental', fundTotal, 30, d.breakdown.fundamental)}
       ${groupHtml('Momentum', momTotal, 30, d.breakdown.momentum)}
     </div>
 
     <div class="section-title">Key Stats</div>
     ${statsHtml}
+
+    ${renderOptions(d.options)}
 
     ${newsHtml}
 

@@ -619,6 +619,77 @@
       font-size: 11px;
     }
 
+    /* Options section */
+    .options-card {
+      background: var(--bg-row);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .options-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .options-header-left {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .options-exp {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .options-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .options-meta span strong { color: var(--text); font-weight: 600; }
+
+    .opt-strategy {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .opt-strategy:last-child { border-bottom: none; }
+    .opt-strategy-title {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .opt-strategy-title .annual {
+      color: var(--green);
+      font-size: 10px;
+    }
+    .opt-strategy-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 4px;
+      font-size: 10px;
+    }
+    .opt-strategy-details > div label {
+      display: block;
+      color: var(--text-dim);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .opt-strategy-details > div span {
+      color: var(--text);
+      font-weight: 500;
+    }
+
     .detail-footer-actions {
       display: flex;
       gap: 8px;
