@@ -678,11 +678,12 @@ function renderBreakoutWindow(w) {
 }
 
 function renderDetailBody(d) {
-  const maxScore = d.maxScore || 100;
-  const scorePct = (d.score / maxScore) * 100;
-  const scoreLabel = scorePct >= 70 ? 'STRONG' : scorePct >= 40 ? 'NEUTRAL' : 'WEAK';
-  const scoreClass = scorePct >= 70 ? 'strong' : scorePct >= 40 ? 'neutral' : 'weak';
-  const breakoutProb = Math.round(scorePct);
+  const rawMax = d.maxScore || 100;
+  // Always display score on /100 scale (normalize ETF's 70 max to 100)
+  const normalizedScore = Math.round((d.score / rawMax) * 100);
+  const scoreLabel = normalizedScore >= 70 ? 'STRONG' : normalizedScore >= 40 ? 'NEUTRAL' : 'WEAK';
+  const scoreClass = normalizedScore >= 70 ? 'strong' : normalizedScore >= 40 ? 'neutral' : 'weak';
+  const breakoutProb = normalizedScore;
 
   const techTotal = d.breakdown.technical.reduce((s, i) => s + i.pts, 0);
   const fundTotal = d.breakdown.fundamental.reduce((s, i) => s + i.pts, 0);
@@ -749,17 +750,17 @@ function renderDetailBody(d) {
       <div class="score-display">
         <div class="score-ring">
           <div>
-            <span class="score-number">${d.score}</span><span class="score-suffix">/${maxScore}</span>
+            <span class="score-number">${normalizedScore}</span><span class="score-suffix">/100</span>
           </div>
         </div>
         <div>
           <div class="score-label ${scoreClass}">${scoreLabel}</div>
           <div class="breakout-prob">Breakout probability: ${breakoutProb}%</div>
           ${renderBreakoutWindow(d.breakoutWindow)}
-          ${d.isETF ? '<div class="breakout-prob" style="margin-top:2px;">ETF (no fundamentals)</div>' : ''}
+          ${d.isETF ? `<div class="breakout-prob" style="margin-top:2px;">ETF: ${d.score}/70 normalized to 100</div>` : ''}
         </div>
       </div>
-      <div class="score-bar"><div class="score-bar-fill ${scoreClass}" style="width:${scorePct}%;"></div></div>
+      <div class="score-bar"><div class="score-bar-fill ${scoreClass}" style="width:${normalizedScore}%;"></div></div>
       ${groupHtml('Technical', techTotal, 40, d.breakdown.technical)}
       ${d.isETF ? '' : groupHtml('Fundamental', fundTotal, 30, d.breakdown.fundamental)}
       ${groupHtml('Momentum', momTotal, 30, d.breakdown.momentum)}
