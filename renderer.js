@@ -41,7 +41,9 @@ const lastUpdatedEl = document.getElementById('lastUpdated');
 const pageTitle = document.getElementById('pageTitle');
 const btnAdd = document.getElementById('btnAdd');
 const btnRefresh = document.getElementById('btnRefresh');
+const btnRoll = document.getElementById('btnRoll');
 const btnSettings = document.getElementById('btnSettings');
+if (btnRoll) btnRoll.addEventListener('click', () => window.api.openRollWindow && window.api.openRollWindow());
 const addForm = document.getElementById('addForm');
 const btnAddConfirm = document.getElementById('btnAddConfirm');
 const btnAddCancel = document.getElementById('btnAddCancel');
@@ -581,6 +583,7 @@ const detailSymbolEl = document.getElementById('detailSymbol');
 const detailNameEl = document.getElementById('detailName');
 const detailBodyEl = document.getElementById('detailBody');
 const btnDetailBack = document.getElementById('btnDetailBack');
+let currentDetailSymbol = null;
 
 btnDetailBack.addEventListener('click', closeDetailPanel);
 
@@ -607,6 +610,7 @@ function fmtTimeAgo(ts) {
 }
 
 async function openDetailPanel(symbol) {
+  currentDetailSymbol = symbol;
   detailSymbolEl.textContent = displayName(symbol);
   detailNameEl.textContent = '';
   detailBodyEl.innerHTML = '<div class="detail-loading"><span class="spinner"></span>Loading...</div>';
@@ -621,6 +625,34 @@ async function openDetailPanel(symbol) {
   if (data.longName) detailNameEl.textContent = data.longName;
 
   renderDetailBody(data);
+}
+
+function pickExpForWeeks(expirationDates, weeks) {
+  if (!expirationDates || !expirationDates.length) return null;
+  const target = Date.now() / 1000 + weeks * 7 * 86400;
+  // Pick the expiration with smallest absolute distance to target
+  let best = expirationDates[0];
+  let bestDiff = Math.abs(best - target);
+  for (const d of expirationDates) {
+    const diff = Math.abs(d - target);
+    if (diff < bestDiff) { bestDiff = diff; best = d; }
+  }
+  return best;
+}
+
+function renderExpChips(opt) {
+  const dates = opt.expirationDates || [];
+  if (!dates.length) return '';
+  const weeks = [1, 2, 3, 4];
+  const buttons = weeks.map(w => {
+    const target = pickExpForWeeks(dates, w);
+    if (target == null) {
+      return `<button class="exp-chip" disabled>${w}W</button>`;
+    }
+    const active = target === opt.expiration ? 'active' : '';
+    return `<button class="exp-chip ${active}" data-exp="${target}" data-weeks="${w}">${w}W</button>`;
+  }).join('');
+  return `<div class="exp-chips">${buttons}</div>`;
 }
 
 function renderOptions(opt) {
@@ -651,7 +683,7 @@ function renderOptions(opt) {
   };
 
   return `
-    <div class="options-card">
+    <div class="options-card" data-options-card>
       <div class="options-header">
         <span class="options-header-left">Options Summary</span>
         <span class="options-exp">Exp: ${expDate} (${opt.daysToExp}d)</span>
@@ -661,10 +693,39 @@ function renderOptions(opt) {
         <span>P/C Ratio <strong>${pcr}</strong></span>
         <span>${opt.expirationCount} expirations</span>
       </div>
+      ${renderExpChips(opt)}
       ${strategyHtml('Covered Call', opt.ccCall, opt.ccAnnualReturn, '(5% OTM)')}
       ${strategyHtml('Cash Secured Put', opt.cspPut, opt.cspAnnualReturn, '(5% OTM)')}
     </div>
   `;
+}
+
+async function handleExpChipClick(target) {
+  if (!currentDetailSymbol) return;
+  const card = detailBodyEl.querySelector('[data-options-card]');
+  if (!card) return;
+  // disable all chips during fetch
+  card.querySelectorAll('.exp-chip').forEach(b => b.disabled = true);
+  const newOpt = await window.api.fetchOptionsForDate(currentDetailSymbol, target);
+  if (!newOpt || newOpt.error) {
+    card.querySelectorAll('.exp-chip').forEach(b => b.disabled = false);
+    return;
+  }
+  const wrap = document.createElement('div');
+  wrap.innerHTML = renderOptions(newOpt);
+  const newCard = wrap.firstElementChild;
+  card.replaceWith(newCard);
+  attachExpChipHandlers();
+}
+
+function attachExpChipHandlers() {
+  detailBodyEl.querySelectorAll('.exp-chip').forEach(btn => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', (e) => {
+      const t = parseInt(e.currentTarget.dataset.exp, 10);
+      if (t) handleExpChipClick(t);
+    });
+  });
 }
 
 function renderBreakoutWindow(w) {
@@ -786,6 +847,9 @@ function renderDetailBody(d) {
       if (link) window.api.openExternal(link);
     });
   });
+
+  // Wire expiration chips in options card
+  attachExpChipHandlers();
 
   // Remove button
   const removeBtn = detailBodyEl.querySelector('.btn-detail-remove');

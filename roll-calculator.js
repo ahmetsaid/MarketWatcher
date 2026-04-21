@@ -202,6 +202,17 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// === Theme sync with MarketTracker settings ===
+async function applyTheme() {
+  try {
+    const settings = await window.api.loadSettings();
+    document.body.classList.remove('theme-midnight', 'theme-pureblack');
+    if (settings && settings.theme === 'midnight') document.body.classList.add('theme-midnight');
+    else if (settings && settings.theme === 'pureblack') document.body.classList.add('theme-pureblack');
+    // 'tradingview' (default) requires no class
+  } catch { /* fall back to default theme */ }
+}
+
 // === Persistence ===
 async function loadState() {
   const data = await window.api.loadRolls();
@@ -334,7 +345,11 @@ function init() {
     }
   });
 
+  applyTheme();
   loadState();
+
+  // Re-sync theme when window regains focus (user may have changed it in MarketTracker)
+  window.addEventListener('focus', applyTheme);
 }
 
 document.addEventListener('DOMContentLoaded', init);

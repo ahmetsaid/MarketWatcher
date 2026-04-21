@@ -7,9 +7,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Theme: TradingView (default) — matches MarketTracker */
     :root {
       --bg: #131722;
-      --bg-panel: #1e222d;
+      --bg-row: #1e222d;
+      --bg-row-hover: #2a2e39;
+      --bg-expanded: #191d28;
       --bg-input: #2a2e39;
       --bg-hover: #313541;
       --border: #2a2e39;
@@ -25,6 +28,52 @@
       --yellow-bg: rgba(247,185,36,0.15);
       --accent: #2962ff;
       --accent-bg: rgba(41,98,255,0.15);
+    }
+
+    /* Theme: Midnight Blue */
+    body.theme-midnight {
+      --bg: #0b1628;
+      --bg-row: #122040;
+      --bg-row-hover: #1a2d52;
+      --bg-expanded: #0e1a33;
+      --bg-input: #1a2d52;
+      --bg-hover: #233a66;
+      --border: #1a2d52;
+      --border-strong: #2b4478;
+      --text: #c8d6e5;
+      --text-dim: #576e8a;
+      --text-bright: #ffffff;
+      --green: #00d2a0;
+      --green-bg: rgba(0,210,160,0.15);
+      --red: #ff6b6b;
+      --red-bg: rgba(255,107,107,0.15);
+      --yellow: #feca57;
+      --yellow-bg: rgba(254,202,87,0.15);
+      --accent: #4facfe;
+      --accent-bg: rgba(79,172,254,0.15);
+    }
+
+    /* Theme: Pure Black */
+    body.theme-pureblack {
+      --bg: #000000;
+      --bg-row: #0a0a0a;
+      --bg-row-hover: #151515;
+      --bg-expanded: #050505;
+      --bg-input: #121212;
+      --bg-hover: #1c1c1c;
+      --border: #1a1a1a;
+      --border-strong: #2a2a2a;
+      --text: #e0e0e0;
+      --text-dim: #666666;
+      --text-bright: #ffffff;
+      --green: #00e676;
+      --green-bg: rgba(0,230,118,0.15);
+      --red: #ff1744;
+      --red-bg: rgba(255,23,68,0.15);
+      --yellow: #ffea00;
+      --yellow-bg: rgba(255,234,0,0.15);
+      --accent: #448aff;
+      --accent-bg: rgba(68,138,255,0.15);
     }
 
     body {
@@ -98,7 +147,7 @@
     }
 
     .panel {
-      background: var(--bg-panel);
+      background: var(--bg-row);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 14px 16px;
@@ -157,9 +206,40 @@
     input:focus, select:focus { border-color: var(--accent); }
     input[type="number"] { font-variant-numeric: tabular-nums; }
 
+    /* Date quick-switch chips */
+    .date-chips {
+      display: flex;
+      gap: 4px;
+      margin-top: 5px;
+    }
+    .date-chips button {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 4px 0;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.12s;
+    }
+    .date-chips button:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+    .date-chips button.active {
+      background: var(--accent);
+      color: var(--text-bright);
+      border-color: var(--accent);
+    }
+
     /* Calculated readouts */
     .calc-block {
-      background: var(--bg-panel);
+      background: var(--bg-row);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 14px 16px;
@@ -207,7 +287,7 @@
       display: flex;
       align-items: center;
       gap: 14px;
-      background: var(--bg-panel);
+      background: var(--bg-row);
     }
     .decision .emoji { font-size: 28px; line-height: 1; }
     .decision .text {
@@ -282,7 +362,7 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 12px;
-      background: var(--bg-panel);
+      background: var(--bg-row);
       border: 1px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
@@ -345,7 +425,7 @@
       margin-top: 12px;
     }
     .summary-card {
-      background: var(--bg-panel);
+      background: var(--bg-row);
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 10px 12px;
@@ -373,7 +453,7 @@
       position: fixed;
       bottom: 20px;
       right: 20px;
-      background: var(--bg-panel);
+      background: var(--bg-row);
       border: 1px solid var(--green);
       color: var(--text);
       padding: 10px 16px;
@@ -555,14 +635,14 @@
     <table class="portfolio-table" id="portfolio-table">
       <thead>
         <tr>
-          <th>Sembol</th>
+          <th>Symbol</th>
           <th>Strike</th>
-          <th>Vade</th>
-          <th>Hisse</th>
-          <th>Prim Alındı ($)</th>
-          <th>Şu an değer ($)</th>
-          <th>Net K/Z ($)</th>
-          <th>Roll maliyet tahmini ($)</th>
+          <th>Expiration</th>
+          <th>Shares</th>
+          <th>Premium Received ($)</th>
+          <th>Current Value ($)</th>
+          <th>Net P/L ($)</th>
+          <th>Est. Roll Cost ($)</th>
           <th></th>
         </tr>
       </thead>
@@ -584,23 +664,23 @@
 
     <div class="summary-grid">
       <div class="summary-card">
-        <div class="lbl">Toplam assignment geliri</div>
+        <div class="lbl">Total Assignment Proceeds</div>
         <div class="val" id="s-assign-gelir">$0.00</div>
       </div>
       <div class="summary-card">
-        <div class="lbl">Toplam maliyet bazı</div>
+        <div class="lbl">Total Cost Basis</div>
         <div class="val" id="s-maliyet-bazi">$0.00</div>
       </div>
       <div class="summary-card">
-        <div class="lbl">Toplam roll maliyeti</div>
+        <div class="lbl">Total Roll Cost</div>
         <div class="val" id="s-roll-maliyet">$0.00</div>
       </div>
       <div class="summary-card net-kar-roll">
-        <div class="lbl">NET KAR (roll dahil)</div>
+        <div class="lbl">NET PROFIT (with roll)</div>
         <div class="val" id="s-net-roll">$0.00</div>
       </div>
       <div class="summary-card net-kar-assign">
-        <div class="lbl">NET KAR (assignment dahil)</div>
+        <div class="lbl">NET PROFIT (assigned)</div>
         <div class="val" id="s-net-assign">$0.00</div>
       </div>
     </div>
