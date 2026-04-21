@@ -5,6 +5,7 @@ const fs = require('fs');
 const USER_DATA = app.getPath('userData');
 const PORTFOLIO_PATH = path.join(USER_DATA, 'portfolio.json');
 const SETTINGS_PATH = path.join(USER_DATA, 'settings.json');
+const ROLLS_PATH = path.join(USER_DATA, 'rolls.json');
 
 const DEFAULT_SETTINGS = {
   refreshInterval: 30,
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS = {
   chartRange: '1d',
 };
 let mainWindow = null;
+let rollWindow = null;
 let tray = null;
 
 function createWindow() {
@@ -44,6 +46,31 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
+function createRollWindow() {
+  if (rollWindow) {
+    rollWindow.show();
+    rollWindow.focus();
+    return;
+  }
+  rollWindow = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    minWidth: 900,
+    minHeight: 640,
+    frame: false,
+    alwaysOnTop: false,
+    backgroundColor: '#131722',
+    title: 'Options Roll Calculator',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  rollWindow.loadFile('roll-calculator.html');
+  rollWindow.on('closed', () => { rollWindow = null; });
+}
+
 function createTray() {
   // Create a simple 16x16 tray icon
   const icon = nativeImage.createFromBuffer(createTrayIcon());
@@ -58,6 +85,11 @@ function createTray() {
     {
       label: 'Open portfolio.json',
       click: () => { shell.openPath(PORTFOLIO_PATH); },
+    },
+    { type: 'separator' },
+    {
+      label: 'Roll Calculator',
+      click: () => { createRollWindow(); },
     },
     { type: 'separator' },
     {
@@ -142,6 +174,53 @@ ipcMain.handle('load-settings', () => {
 
 ipcMain.handle('save-settings', (_event, data) => {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(data, null, 2));
+  return true;
+});
+
+// --- Rolls (Options Roll Calculator) ---
+ipcMain.handle('load-rolls', () => {
+  try {
+    const data = fs.readFileSync(ROLLS_PATH, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    const defaults = {
+      current: {
+        symbol: 'SOXL',
+        positionType: 'cc',
+        strike: 0,
+        expiration: '',
+        shares: 100,
+        originalPremium: 0,
+        currentAsk: 0,
+        costBasis: 54.50,
+      },
+      target: { newStrike: 0, newExpiration: '', newPremium: 0 },
+      portfolio: [],
+      alwaysOnTop: false,
+    };
+    fs.writeFileSync(ROLLS_PATH, JSON.stringify(defaults, null, 2));
+    return defaults;
+  }
+});
+
+ipcMain.handle('save-rolls', (_event, data) => {
+  fs.writeFileSync(ROLLS_PATH, JSON.stringify(data, null, 2));
+  return true;
+});
+
+ipcMain.handle('roll-set-always-on-top', (_event, value) => {
+  if (rollWindow) rollWindow.setAlwaysOnTop(!!value);
+  return true;
+});
+
+ipcMain.handle('roll-window-control', (_event, action) => {
+  if (!rollWindow) return false;
+  if (action === 'minimize') rollWindow.minimize();
+  else if (action === 'close') rollWindow.close();
+  else if (action === 'maximize') {
+    if (rollWindow.isMaximized()) rollWindow.unmaximize();
+    else rollWindow.maximize();
+  }
   return true;
 });
 

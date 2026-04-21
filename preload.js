@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld('api', {
   onForceRefresh: (cb) => ipcRenderer.on('force-refresh', cb),
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (data) => ipcRenderer.invoke('save-settings', data),
+  loadRolls: () => ipcRenderer.invoke('load-rolls'),
+  saveRolls: (data) => ipcRenderer.invoke('save-rolls', data),
+  rollSetAlwaysOnTop: (v) => ipcRenderer.invoke('roll-set-always-on-top', v),
+  rollWindowControl: (action) => ipcRenderer.invoke('roll-window-control', action),
 });

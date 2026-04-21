@@ -24,6 +24,8 @@
       "preload.js",
       "renderer.js",
       "index.html",
+      "roll-calculator.html",
+      "roll-calculator.js",
       "portfolio.json",
       "settings.json"
     ],
