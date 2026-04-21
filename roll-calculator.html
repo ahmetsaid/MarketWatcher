@@ -451,6 +451,22 @@
       font-variant-numeric: tabular-nums;
     }
     .portfolio-table td.ask-cell .ask-empty { color: var(--text-dim); font-weight: 400; }
+    .portfolio-table select.type-select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 4px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      width: 100%;
+      min-width: 58px;
+      cursor: pointer;
+    }
+    .portfolio-table select.type-select.type-short { color: var(--red); border-color: rgba(239,83,80,0.35); }
+    .portfolio-table select.type-select.type-long  { color: var(--green); border-color: rgba(38,166,154,0.35); }
+    .portfolio-table select.type-select:focus { outline: none; border-color: var(--accent); }
 
     .summary-grid {
       display: grid;
@@ -693,11 +709,12 @@
       <thead>
         <tr>
           <th>Symbol</th>
+          <th>Type</th>
           <th>Strike</th>
           <th>Expiration</th>
           <th>Shares</th>
           <th>Premium Received ($)</th>
-          <th>Live Ask ($/sh)</th>
+          <th>Live Price ($/sh)</th>
           <th>Current Value ($)</th>
           <th>Net P/L ($)</th>
           <th>Est. Roll Cost ($)</th>
@@ -708,6 +725,7 @@
       <tfoot>
         <tr class="totals" id="totals-row">
           <td>TOTAL</td>
+          <td></td>
           <td></td>
           <td></td>
           <td id="t-shares">0</td>

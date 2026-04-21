@@ -145,17 +145,28 @@ function calc() {
 
 // === Portfolio table ===
 function emptyRow() {
-  return { symbol: 'SOXL', strike: 0, expiration: '', shares: 100, premReceived: 0, currentValue: 0, rollCostEst: 0 };
+  return { symbol: 'SOXL', type: 'CC', strike: 0, expiration: '', shares: 100, premReceived: 0, currentValue: 0, rollCostEst: 0 };
 }
+
+// Short = we wrote the option and want to buy it back → use ASK
+// Long  = we bought the option and want to sell it back → use BID
+const TYPE_META = {
+  CC:   { side: 'call', short: true,  label: 'CC',   title: 'Covered Call (short call)' },
+  CSP:  { side: 'put',  short: true,  label: 'CSP',  title: 'Cash Secured Put (short put)' },
+  Call: { side: 'call', short: false, label: 'Call', title: 'Long Call' },
+  Put:  { side: 'put',  short: false, label: 'Put',  title: 'Long Put' },
+};
 
 function addRow(data) {
   state.portfolio.push(data || emptyRow());
   renderPortfolio();
+  saveState(true);
 }
 
 function removeRow(idx) {
   state.portfolio.splice(idx, 1);
   renderPortfolio();
+  saveState(true);
 }
 
 function renderPortfolio() {
@@ -167,8 +178,14 @@ function renderPortfolio() {
     const askDisplay = (p.askPerShare != null && p.askPerShare > 0)
       ? `<span class="ask-live" title="${p.askUpdatedAt ? 'Updated ' + new Date(p.askUpdatedAt).toLocaleTimeString() : ''}">${p.askPerShare.toFixed(2)}</span>`
       : `<span class="ask-empty">—</span>`;
+    const pType = p.type && TYPE_META[p.type] ? p.type : 'CC';
+    const typeOpts = Object.keys(TYPE_META).map(t =>
+      `<option value="${t}" ${t === pType ? 'selected' : ''} title="${TYPE_META[t].title}">${TYPE_META[t].label}</option>`
+    ).join('');
+    const typeClass = TYPE_META[pType].short ? 'type-short' : 'type-long';
     tr.innerHTML = `
       <td><input type="text" data-idx="${idx}" data-k="symbol" value="${escapeHtml(p.symbol || '')}"></td>
+      <td><select class="type-select ${typeClass}" data-idx="${idx}" data-k="type" title="${TYPE_META[pType].title}">${typeOpts}</select></td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="strike" value="${p.strike || 0}"></td>
       <td><input type="date" data-idx="${idx}" data-k="expiration" value="${p.expiration || ''}"></td>
       <td><input type="number" step="1" data-idx="${idx}" data-k="shares" value="${p.shares || 0}"></td>
@@ -191,6 +208,15 @@ function renderPortfolio() {
       const v = e.target.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value;
       state.portfolio[i][k] = v;
       renderPortfolioTotals();
+      scheduleAutoSave();
+    });
+  });
+  tbody.querySelectorAll('select.type-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const i = parseInt(e.target.dataset.idx, 10);
+      state.portfolio[i].type = e.target.value;
+      renderPortfolio();       // re-render to update color / title
+      scheduleAutoSave();
     });
   });
   tbody.querySelectorAll('.del-btn').forEach(btn => {
@@ -215,7 +241,7 @@ async function refreshRow(idx) {
     toast('⚠ Row needs symbol, strike, expiration');
     return;
   }
-  const type = $('positionType').value === 'csp' ? 'put' : 'call';
+  const meta = TYPE_META[p.type] || TYPE_META.CC;
   const tbody = $('portfolio-tbody');
   const tr = tbody.children[idx];
   const btn = tr && tr.querySelector('.refresh-btn');
@@ -227,14 +253,16 @@ async function refreshRow(idx) {
       symbol: p.symbol,
       expDate: p.expiration,
       strike: parseFloat(p.strike),
-      type,
+      type: meta.side, // 'call' or 'put'
     });
     if (!q || q.error) {
       toast('⚠ ' + (q && q.error ? q.error : 'Fetch failed'));
       return false;
     }
-    // Ask = cost to buy back the short option. Fall back to last if ask is 0 (illiquid).
-    const perShare = (q.ask && q.ask > 0) ? q.ask : (q.last || 0);
+    // Short (CC/CSP) → we buy back at ASK.  Long (Call/Put) → we sell back at BID.
+    // Fall back to last if primary side is 0 (illiquid).
+    const primary = meta.short ? q.ask : q.bid;
+    const perShare = (primary && primary > 0) ? primary : (q.last || 0);
     p.askPerShare = perShare;
     p.askUpdatedAt = Date.now();
     p.currentValue = Math.round(perShare * (p.shares || 0) * 100) / 100;
@@ -361,6 +389,12 @@ async function loadState() {
   calc();
 }
 
+let autoSaveTimer = null;
+function scheduleAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => { saveState(true); }, 600);
+}
+
 async function saveState(silent) {
   const data = {
     current: {
@@ -433,8 +467,10 @@ function toast(msg) {
 function init() {
   FIELDS.forEach(id => {
     const el = $(id);
-    if (el) el.addEventListener('input', calc);
-    if (el) el.addEventListener('change', calc);
+    if (!el) return;
+    const onChange = () => { calc(); scheduleAutoSave(); };
+    el.addEventListener('input', onChange);
+    el.addEventListener('change', onChange);
   });
 
   $('btn-calc').addEventListener('click', calc);
