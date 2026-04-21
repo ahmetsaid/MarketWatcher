@@ -33,7 +33,16 @@ const FIELDS = [
 let state = {
   portfolio: [],
   alwaysOnTop: false,
+  rollTargetWeeks: 1,
 };
+
+function addWeeksToDate(dateStr, weeks) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + weeks * 7);
+  return d.toISOString().slice(0, 10);
+}
 
 // === Core calculations ===
 function calc() {
@@ -266,6 +275,35 @@ async function refreshRow(idx) {
     p.askPerShare = perShare;
     p.askUpdatedAt = Date.now();
     p.currentValue = Math.round(perShare * (p.shares || 0) * 100) / 100;
+
+    // Also estimate Roll Cost: fetch same-strike option N weeks further out.
+    //   Short: est = (ask_now − bid_new) × shares  (positive = debit roll)
+    //   Long : est = (ask_new − bid_now) × shares
+    const weeks = state.rollTargetWeeks || 1;
+    const targetExp = addWeeksToDate(p.expiration, weeks);
+    if (targetExp) {
+      try {
+        const q2 = await window.api.fetchOptionQuote({
+          symbol: p.symbol,
+          expDate: targetExp,
+          strike: parseFloat(p.strike),
+          type: meta.side,
+        });
+        if (q2 && !q2.error) {
+          let est = 0;
+          if (meta.short) {
+            const newBid = (q2.bid && q2.bid > 0) ? q2.bid : (q2.last || 0);
+            est = (perShare - newBid) * (p.shares || 0);
+          } else {
+            const newAsk = (q2.ask && q2.ask > 0) ? q2.ask : (q2.last || 0);
+            est = (newAsk - perShare) * (p.shares || 0);
+          }
+          p.rollCostEst = Math.round(est * 100) / 100;
+          p.rollTargetExp = q2.matchedExpiration || null;
+          p.rollTargetWeeks = weeks;
+        }
+      } catch { /* keep manual value on failure */ }
+    }
     // Keep matched strike if Yahoo snapped it
     if (q.matchedStrike && Math.abs(q.matchedStrike - parseFloat(p.strike)) > 0.001) {
       // Don't overwrite user's typed strike; just note it in toast once
@@ -381,6 +419,8 @@ async function loadState() {
   }
   state.portfolio = Array.isArray(data.portfolio) ? data.portfolio : [];
   state.alwaysOnTop = !!data.alwaysOnTop;
+  state.rollTargetWeeks = data.rollTargetWeeks && [1,2,3,4].includes(data.rollTargetWeeks) ? data.rollTargetWeeks : 1;
+  $('roll-weeks').value = String(state.rollTargetWeeks);
   if (state.alwaysOnTop) {
     $('btn-pin').classList.add('active');
     window.api.rollSetAlwaysOnTop(true);
@@ -414,6 +454,7 @@ async function saveState(silent) {
     },
     portfolio: state.portfolio,
     alwaysOnTop: state.alwaysOnTop,
+    rollTargetWeeks: state.rollTargetWeeks || 1,
   };
   await window.api.saveRolls(data);
   if (!silent) toast('💾 Saved to rolls.json');
@@ -485,6 +526,10 @@ function init() {
   });
   $('btn-add-row').addEventListener('click', () => addRow());
   $('btn-refresh-all').addEventListener('click', () => refreshAll());
+  $('roll-weeks').addEventListener('change', (e) => {
+    state.rollTargetWeeks = parseInt(e.target.value, 10) || 1;
+    scheduleAutoSave();
+  });
 
   $('btn-pin').addEventListener('click', () => {
     state.alwaysOnTop = !state.alwaysOnTop;

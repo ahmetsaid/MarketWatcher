@@ -467,6 +467,18 @@
     .portfolio-table select.type-select.type-short { color: var(--red); border-color: rgba(239,83,80,0.35); }
     .portfolio-table select.type-select.type-long  { color: var(--green); border-color: rgba(38,166,154,0.35); }
     .portfolio-table select.type-select:focus { outline: none; border-color: var(--accent); }
+    select.roll-weeks-select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    select.roll-weeks-select:focus { outline: none; border-color: var(--accent); }
 
     .summary-grid {
       display: grid;
@@ -700,8 +712,15 @@
     <!-- Portfolio summary table -->
     <div class="portfolio-title">
       <span>📂 Full Portfolio — Open Option Positions</span>
-      <div style="display:flex; gap:6px;">
-        <button class="btn" id="btn-refresh-all" title="Fetch live ask for every row from Yahoo">&#8635; Refresh Live</button>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <label style="font-size:11px; color:var(--text-dim); font-weight:400; letter-spacing:0.3px;">Roll target:</label>
+        <select id="roll-weeks" class="roll-weeks-select" title="Weeks out for Est. Roll Cost (same strike)">
+          <option value="1">+1W</option>
+          <option value="2">+2W</option>
+          <option value="3">+3W</option>
+          <option value="4">+4W</option>
+        </select>
+        <button class="btn" id="btn-refresh-all" title="Fetch live price for every row + estimate roll cost from Yahoo">&#8635; Refresh Live</button>
         <button class="btn" id="btn-add-row">+ Add Row</button>
       </div>
     </div>
