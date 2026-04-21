@@ -267,6 +267,17 @@
       font-variant-numeric: tabular-nums;
     }
     .calc-row.emphasis .val { color: var(--text-bright); font-size: 14px; }
+    .calc-stack { margin-bottom: 2px; }
+    .calc-breakdown {
+      font-size: 10.5px;
+      color: var(--text-dim);
+      padding: 0 0 4px 0;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.1px;
+    }
+    .calc-breakdown:empty { display: none; }
+    .calc-breakdown .plus { color: var(--green); }
+    .calc-breakdown .minus { color: var(--red); }
     .positive { color: var(--green); }
     .negative { color: var(--red); }
 
@@ -470,6 +481,17 @@
     .summary-card.net-kar-roll .val { color: var(--accent); }
     .summary-card.net-kar-assign { border-color: var(--green); }
     .summary-card.net-kar-assign .val { color: var(--green); }
+    .summary-card .summary-breakdown {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+      letter-spacing: 0.1px;
+    }
+    .summary-card .summary-breakdown:empty { display: none; }
+    .summary-breakdown .plus { color: var(--green); }
+    .summary-breakdown .minus { color: var(--red); }
 
     /* Toast */
     .toast {
@@ -618,17 +640,26 @@
 
       <div class="calc-block">
         <div class="calc-title">Assignment Analysis</div>
-        <div class="calc-row">
-          <span class="lbl">If assigned NOW</span>
-          <span class="val" id="a-now">$0.00</span>
+        <div class="calc-stack">
+          <div class="calc-row">
+            <span class="lbl">If assigned NOW</span>
+            <span class="val" id="a-now">$0.00</span>
+          </div>
+          <div class="calc-breakdown" id="a-now-bd"></div>
         </div>
-        <div class="calc-row">
-          <span class="lbl">If rolled & assigned</span>
-          <span class="val" id="a-rolled">$0.00</span>
+        <div class="calc-stack">
+          <div class="calc-row">
+            <span class="lbl">If rolled & assigned</span>
+            <span class="val" id="a-rolled">$0.00</span>
+          </div>
+          <div class="calc-breakdown" id="a-rolled-bd"></div>
         </div>
-        <div class="calc-row emphasis">
-          <span class="lbl">Difference (rolled − current)</span>
-          <span class="val" id="a-diff">$0.00</span>
+        <div class="calc-stack">
+          <div class="calc-row emphasis">
+            <span class="lbl">Difference (rolled − current)</span>
+            <span class="val" id="a-diff">$0.00</span>
+          </div>
+          <div class="calc-breakdown" id="a-diff-bd"></div>
         </div>
       </div>
     </div>
@@ -706,10 +737,12 @@
       <div class="summary-card net-kar-roll">
         <div class="lbl">NET PROFIT (with roll)</div>
         <div class="val" id="s-net-roll">$0.00</div>
+        <div class="summary-breakdown" id="s-net-roll-bd"></div>
       </div>
       <div class="summary-card net-kar-assign">
         <div class="lbl">NET PROFIT (assigned)</div>
         <div class="val" id="s-net-assign">$0.00</div>
+        <div class="summary-breakdown" id="s-net-assign-bd"></div>
       </div>
     </div>
   </div>

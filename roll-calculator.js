@@ -6,6 +6,12 @@ const fmt = (n) => {
   const sign = n < 0 ? '-' : '';
   return sign + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
+// Compact breakdown formatter: "$1.5K" / "$29.4K" / "$305" — no cents, unsigned (caller adds sign/color)
+const fmtBd = (n) => {
+  const v = Math.abs(+n) || 0;
+  if (v >= 1000) return '$' + (v / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 }) + 'K';
+  return '$' + Math.round(v).toLocaleString('en-US');
+};
 const num = (id) => {
   const v = parseFloat($(id).value);
   return isFinite(v) ? v : 0;
@@ -58,11 +64,12 @@ function calc() {
   $('r-netcash').className = 'val ' + (netCashToRoll <= 0 ? 'positive' : 'negative');
   $('r-rollcost').textContent = fmt(netRollCost);
 
-  // Assignment analysis (per spec)
-  // CC: assignment means shares called away at strike. Profit = (strike - costBasis) × shares
-  // CSP: "assigned" means you buy shares at strike. We still show (strike - costBasis) × shares as spec dictates.
-  const assignedNow = (strike - costBasis) * shares;
-  const rolledAssigned = (newStrike - costBasis) * shares - netRollCost;
+  // Assignment analysis — symmetric cash accounting (both scenarios include origPrem)
+  //   assignedNow    = (strike − costBasis)×shares + origPrem
+  //   rolledAssigned = (newStrike − costBasis)×shares + origPrem + newPrem − buyback
+  //   diff simplifies to (newStrike − strike)×shares − netCashToRoll
+  const assignedNow = (strike - costBasis) * shares + origPremTotal;
+  const rolledAssigned = (newStrike - costBasis) * shares + origPremTotal + newPremTotal - buybackCost;
   const diff = rolledAssigned - assignedNow;
 
   $('a-now').textContent = fmt(assignedNow);
@@ -71,6 +78,25 @@ function calc() {
   $('a-rolled').className = 'val ' + (rolledAssigned >= 0 ? 'positive' : 'negative');
   $('a-diff').textContent = fmt(diff);
   $('a-diff').className = 'val ' + (diff >= 0 ? 'positive' : 'negative');
+
+  // Breakdown labels — only show once user has entered meaningful data
+  const hasNow = strike > 0 && shares > 0;
+  const hasRoll = hasNow && newStrike > 0 && (buybackCost > 0 || newPremTotal > 0);
+  const stockNow = (strike - costBasis) * shares;
+  const stockRolled = (newStrike - costBasis) * shares;
+  const stockImprove = (newStrike - strike) * shares;
+
+  $('a-now-bd').innerHTML = hasNow
+    ? `<span class="plus">+${fmtBd(stockNow)}</span> stock <span class="plus">+${fmtBd(origPremTotal)}</span> orig prem`
+    : '';
+
+  $('a-rolled-bd').innerHTML = hasRoll
+    ? `<span class="plus">+${fmtBd(stockRolled)}</span> stock <span class="plus">+${fmtBd(origPremTotal)}</span> orig <span class="plus">+${fmtBd(newPremTotal)}</span> new <span class="minus">−${fmtBd(buybackCost)}</span> buyback`
+    : '';
+
+  $('a-diff-bd').innerHTML = hasRoll
+    ? `<span class="${stockImprove >= 0 ? 'plus' : 'minus'}">${stockImprove >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockImprove))}</span> strike <span class="${netCashToRoll <= 0 ? 'plus' : 'minus'}">${netCashToRoll <= 0 ? '+' : '−'}${fmtBd(Math.abs(netCashToRoll))}</span> cash`
+    : '';
 
   // Days to expiration pills
   const dExp = daysBetween($('expiration').value);
@@ -284,6 +310,16 @@ function renderPortfolioTotals() {
   $('s-roll-maliyet').textContent = fmt(totRollCost);
   $('s-net-roll').textContent = fmt(netKarRoll);
   $('s-net-assign').textContent = fmt(netKarAssign);
+
+  // Breakdowns — show only when we have positions
+  const stockGain = totAssignProceeds - totCostBasis;
+  const hasData = totShares > 0;
+  $('s-net-assign-bd').innerHTML = hasData
+    ? `<span class="${stockGain >= 0 ? 'plus' : 'minus'}">${stockGain >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockGain))}</span> stock <span class="plus">+${fmtBd(totPrim)}</span> prem`
+    : '';
+  $('s-net-roll-bd').innerHTML = hasData
+    ? `<span class="${stockGain >= 0 ? 'plus' : 'minus'}">${stockGain >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockGain))}</span> stock <span class="plus">+${fmtBd(totPrim)}</span> prem <span class="${totRollCost > 0 ? 'minus' : ''}">${totRollCost > 0 ? '−' + fmtBd(totRollCost) : '$0'}</span> roll`
+    : '';
 }
 
 function escapeHtml(s) {
