@@ -417,6 +417,29 @@
       border-radius: 3px;
     }
     .portfolio-table .del-btn:hover { color: var(--red); background: var(--red-bg); }
+    .portfolio-table .refresh-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-right: 2px;
+      transition: all 0.15s;
+    }
+    .portfolio-table .refresh-btn:hover { color: var(--accent); background: var(--accent-bg); }
+    .portfolio-table .refresh-btn.spinning { animation: spin 0.8s linear infinite; color: var(--accent); }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .portfolio-table tr.refreshing td { opacity: 0.55; }
+    .portfolio-table td .live-flash { animation: flashHL 0.9s ease-out; }
+    @keyframes flashHL { 0% { background: var(--accent-bg); } 100% { background: transparent; } }
+    .portfolio-table td.ask-cell {
+      font-weight: 600;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    .portfolio-table td.ask-cell .ask-empty { color: var(--text-dim); font-weight: 400; }
 
     .summary-grid {
       display: grid;
@@ -630,7 +653,10 @@
     <!-- Portfolio summary table -->
     <div class="portfolio-title">
       <span>📂 Full Portfolio — Open Option Positions</span>
-      <button class="btn" id="btn-add-row">+ Add Row</button>
+      <div style="display:flex; gap:6px;">
+        <button class="btn" id="btn-refresh-all" title="Fetch live ask for every row from Yahoo">&#8635; Refresh Live</button>
+        <button class="btn" id="btn-add-row">+ Add Row</button>
+      </div>
     </div>
     <table class="portfolio-table" id="portfolio-table">
       <thead>
@@ -640,6 +666,7 @@
           <th>Expiration</th>
           <th>Shares</th>
           <th>Premium Received ($)</th>
+          <th>Live Ask ($/sh)</th>
           <th>Current Value ($)</th>
           <th>Net P/L ($)</th>
           <th>Est. Roll Cost ($)</th>
@@ -654,6 +681,7 @@
           <td></td>
           <td id="t-shares">0</td>
           <td id="t-prim">$0.00</td>
+          <td></td>
           <td id="t-value">$0.00</td>
           <td id="t-netkz">$0.00</td>
           <td id="t-rollcost">$0.00</td>

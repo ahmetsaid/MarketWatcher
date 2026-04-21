@@ -601,6 +601,62 @@ ipcMain.handle('fetch-options-for-date', async (_event, symbol, timestamp) => {
   }
 });
 
+// Fetch quote for a specific option contract (for Roll Calculator portfolio refresh)
+ipcMain.handle('fetch-option-quote', async (_event, { symbol, expDate, strike, type }) => {
+  try {
+    if (!symbol || !expDate || !strike) return { error: 'Missing args' };
+    const baseUrl = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`;
+    const base = await fetchJSONAuth(baseUrl);
+    const oc = base && base.optionChain && base.optionChain.result && base.optionChain.result[0];
+    if (!oc || !oc.expirationDates || !oc.expirationDates.length) return { error: 'No option chain' };
+
+    // Pick the Yahoo expiration closest to user's date (interpret as 16:00 ET ≈ 20:00 UTC)
+    const targetTs = Math.floor(new Date(expDate + 'T20:00:00Z').getTime() / 1000);
+    let bestExp = oc.expirationDates[0];
+    let bestDiff = Math.abs(bestExp - targetTs);
+    for (const d of oc.expirationDates) {
+      const diff = Math.abs(d - targetTs);
+      if (diff < bestDiff) { bestDiff = diff; bestExp = d; }
+    }
+
+    // Use base chain if it matches; otherwise fetch the specific expiration
+    let chain = (oc.options && oc.options[0]) || null;
+    if (!chain || chain.expirationDate !== bestExp) {
+      const resp = await fetchJSONAuth(baseUrl + `?date=${bestExp}`);
+      const oc2 = resp && resp.optionChain && resp.optionChain.result && resp.optionChain.result[0];
+      chain = oc2 && oc2.options && oc2.options[0];
+      if (!chain) return { error: 'No chain for expiration' };
+    }
+
+    const arr = type === 'put' ? (chain.puts || []) : (chain.calls || []);
+    if (!arr.length) return { error: 'No contracts at expiration' };
+
+    // Nearest-strike match
+    let best = arr[0];
+    let bestStrikeDiff = Math.abs(best.strike - strike);
+    for (const o of arr) {
+      const diff = Math.abs(o.strike - strike);
+      if (diff < bestStrikeDiff) { bestStrikeDiff = diff; best = o; }
+    }
+
+    return {
+      symbol,
+      type,
+      matchedExpiration: chain.expirationDate,
+      matchedStrike: best.strike,
+      bid: best.bid || 0,
+      ask: best.ask || 0,
+      last: best.lastPrice || 0,
+      volume: best.volume || 0,
+      openInterest: best.openInterest || 0,
+      iv: best.impliedVolatility ? best.impliedVolatility * 100 : null,
+      underlying: oc.quote ? oc.quote.regularMarketPrice : null,
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 ipcMain.handle('fetch-details', async (_event, symbol) => {
   try {
     // 1. Chart 1y for prices, volumes, returns, RSI, MA

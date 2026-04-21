@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   showNotification: (opts) => ipcRenderer.invoke('show-notification', opts),
   fetchDetails: (symbol) => ipcRenderer.invoke('fetch-details', symbol),
   fetchOptionsForDate: (symbol, timestamp) => ipcRenderer.invoke('fetch-options-for-date', symbol, timestamp),
+  fetchOptionQuote: (args) => ipcRenderer.invoke('fetch-option-quote', args),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   onForceRefresh: (cb) => ipcRenderer.on('force-refresh', cb),
   loadSettings: () => ipcRenderer.invoke('load-settings'),

@@ -138,16 +138,23 @@ function renderPortfolio() {
   state.portfolio.forEach((p, idx) => {
     const tr = document.createElement('tr');
     const netKz = (p.premReceived || 0) - (p.currentValue || 0);
+    const askDisplay = (p.askPerShare != null && p.askPerShare > 0)
+      ? `<span class="ask-live" title="${p.askUpdatedAt ? 'Updated ' + new Date(p.askUpdatedAt).toLocaleTimeString() : ''}">${p.askPerShare.toFixed(2)}</span>`
+      : `<span class="ask-empty">—</span>`;
     tr.innerHTML = `
       <td><input type="text" data-idx="${idx}" data-k="symbol" value="${escapeHtml(p.symbol || '')}"></td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="strike" value="${p.strike || 0}"></td>
       <td><input type="date" data-idx="${idx}" data-k="expiration" value="${p.expiration || ''}"></td>
       <td><input type="number" step="1" data-idx="${idx}" data-k="shares" value="${p.shares || 0}"></td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="premReceived" value="${p.premReceived || 0}"></td>
+      <td class="ask-cell">${askDisplay}</td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="currentValue" value="${p.currentValue || 0}"></td>
       <td class="${netKz >= 0 ? 'positive' : 'negative'}">${fmt(netKz)}</td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="rollCostEst" value="${p.rollCostEst || 0}"></td>
-      <td><button class="del-btn" data-del="${idx}" title="Remove">✕</button></td>
+      <td style="white-space:nowrap;">
+        <button class="refresh-btn" data-refresh="${idx}" title="Fetch live ask">&#8635;</button>
+        <button class="del-btn" data-del="${idx}" title="Remove">✕</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -165,7 +172,88 @@ function renderPortfolio() {
       removeRow(parseInt(e.target.dataset.del, 10));
     });
   });
+  tbody.querySelectorAll('.refresh-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const i = parseInt(e.currentTarget.dataset.refresh, 10);
+      refreshRow(i);
+    });
+  });
   renderPortfolioTotals();
+}
+
+// === Live refresh of Current Value from Yahoo ===
+async function refreshRow(idx) {
+  const p = state.portfolio[idx];
+  if (!p) return;
+  if (!p.symbol || !p.strike || !p.expiration) {
+    toast('⚠ Row needs symbol, strike, expiration');
+    return;
+  }
+  const type = $('positionType').value === 'csp' ? 'put' : 'call';
+  const tbody = $('portfolio-tbody');
+  const tr = tbody.children[idx];
+  const btn = tr && tr.querySelector('.refresh-btn');
+  if (tr) tr.classList.add('refreshing');
+  if (btn) btn.classList.add('spinning');
+
+  try {
+    const q = await window.api.fetchOptionQuote({
+      symbol: p.symbol,
+      expDate: p.expiration,
+      strike: parseFloat(p.strike),
+      type,
+    });
+    if (!q || q.error) {
+      toast('⚠ ' + (q && q.error ? q.error : 'Fetch failed'));
+      return false;
+    }
+    // Ask = cost to buy back the short option. Fall back to last if ask is 0 (illiquid).
+    const perShare = (q.ask && q.ask > 0) ? q.ask : (q.last || 0);
+    p.askPerShare = perShare;
+    p.askUpdatedAt = Date.now();
+    p.currentValue = Math.round(perShare * (p.shares || 0) * 100) / 100;
+    // Keep matched strike if Yahoo snapped it
+    if (q.matchedStrike && Math.abs(q.matchedStrike - parseFloat(p.strike)) > 0.001) {
+      // Don't overwrite user's typed strike; just note it in toast once
+    }
+    renderPortfolio();
+    // Flash the updated cell
+    const newTr = $('portfolio-tbody').children[idx];
+    if (newTr) {
+      const cv = newTr.querySelector('[data-k="currentValue"]');
+      if (cv) {
+        cv.classList.add('live-flash');
+        setTimeout(() => cv.classList.remove('live-flash'), 900);
+      }
+    }
+    saveState(true);
+    return true;
+  } catch (err) {
+    toast('⚠ ' + err.message);
+    return false;
+  } finally {
+    // tr may have been re-rendered; guard
+    const stillTr = $('portfolio-tbody').children[idx];
+    if (stillTr) stillTr.classList.remove('refreshing');
+  }
+}
+
+async function refreshAll() {
+  if (!state.portfolio.length) { toast('No rows to refresh'); return; }
+  const btn = $('btn-refresh-all');
+  btn.disabled = true;
+  const origText = btn.textContent;
+  let ok = 0, fail = 0;
+  for (let i = 0; i < state.portfolio.length; i++) {
+    btn.textContent = `⟳ ${i + 1}/${state.portfolio.length}`;
+    const success = await refreshRow(i);
+    if (success) ok++; else fail++;
+    // gentle spacing between Yahoo requests
+    if (i < state.portfolio.length - 1) await new Promise(r => setTimeout(r, 350));
+  }
+  btn.textContent = origText;
+  btn.disabled = false;
+  toast(`✓ Live: ${ok} ok${fail ? `, ${fail} failed` : ''}`);
 }
 
 function renderPortfolioTotals() {
@@ -324,6 +412,7 @@ function init() {
     calc();
   });
   $('btn-add-row').addEventListener('click', () => addRow());
+  $('btn-refresh-all').addEventListener('click', () => refreshAll());
 
   $('btn-pin').addEventListener('click', () => {
     state.alwaysOnTop = !state.alwaysOnTop;
