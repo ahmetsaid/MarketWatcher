@@ -1,6 +1,6 @@
 {
   "name": "market-tracker",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Desktop portfolio tracker widget",
   "main": "main.js",
   "author": "MarketTracker",
