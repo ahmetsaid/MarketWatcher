@@ -213,6 +213,7 @@ function render() {
         <div class="row-price">${price != null ? fmt(price) : '--'}</div>
         <div class="row-chg"><span class="chg-pill ${colorClass(change)}">${fmtChange(change)}</span></div>
         <div class="row-chgpct ${colorClass(changePct)}">${fmtPct(changePct)}</div>
+        <button class="row-delete-btn" data-idx="${idx}" title="Delete ${displayName(pos.symbol)}">&times;</button>
       </div>
       <div class="row-detail ${expandedSymbol === pos.symbol ? 'open' : ''}">
         <div class="detail-stats">
@@ -247,6 +248,8 @@ function render() {
         row.classList.remove('was-dragged');
         return;
       }
+      // In delete mode, do not open anything (only delete button works)
+      if (document.body.classList.contains('delete-mode')) return;
       // Shift+click opens inline expand (for alerts/remove)
       if (e.shiftKey) {
         expandedSymbol = expandedSymbol === pos.symbol ? null : pos.symbol;
@@ -257,6 +260,15 @@ function render() {
         openDetailPanel(pos.symbol);
       }
     });
+
+    // Delete button (shown only in delete-mode)
+    const delBtn = row.querySelector('.row-delete-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await removePosition(idx);
+      });
+    }
 
     // Drag to reorder
     row.setAttribute('draggable', 'true');
@@ -499,23 +511,29 @@ btnSettings.addEventListener('click', () => {
   showView(currentView === 'settings' ? 'watchlist' : 'settings');
 });
 
-// Add symbol
+// Add symbol — also toggles delete-mode (Chg% column becomes red X)
 btnAdd.addEventListener('click', () => {
-  addForm.classList.toggle('open');
-  if (addForm.classList.contains('open')) addSymbolInput.focus();
+  const opening = !addForm.classList.contains('open');
+  addForm.classList.toggle('open', opening);
+  document.body.classList.toggle('delete-mode', opening);
+  btnAdd.classList.toggle('active', opening);
+  if (opening) addSymbolInput.focus();
 });
 
-btnAddCancel.addEventListener('click', () => {
+function closeAddForm() {
   addForm.classList.remove('open');
+  document.body.classList.remove('delete-mode');
+  btnAdd.classList.remove('active');
   addSymbolInput.value = '';
-});
+}
+
+btnAddCancel.addEventListener('click', closeAddForm);
 
 btnAddConfirm.addEventListener('click', async () => {
   const sym = addSymbolInput.value;
   if (!sym.trim()) return;
   await addPosition(sym);
-  addForm.classList.remove('open');
-  addSymbolInput.value = '';
+  closeAddForm();
 });
 
 addSymbolInput.addEventListener('keydown', (e) => {
@@ -618,7 +636,23 @@ async function openDetailPanel(symbol) {
 
   const data = await window.api.fetchDetails(symbol);
   if (!data || data.error) {
-    detailBodyEl.innerHTML = `<div class="detail-loading">Failed to load data${data && data.error ? ': ' + data.error : ''}</div>`;
+    const errMsg = data && data.error ? ': ' + data.error : '';
+    detailBodyEl.innerHTML = `
+      <div style="padding:20px 12px;text-align:center;">
+        <div style="color:var(--text-dim);font-size:11px;margin-bottom:6px;">Failed to load data${errMsg}</div>
+        <div style="color:var(--text-dim);font-size:10px;margin-bottom:16px;">Symbol "${symbol}" may be invalid or delisted.</div>
+        <button class="btn-small danger" id="detailErrorRemove" data-symbol="${symbol}">&times; Remove "${displayName(symbol)}"</button>
+      </div>
+    `;
+    const rmBtn = document.getElementById('detailErrorRemove');
+    if (rmBtn) {
+      rmBtn.addEventListener('click', async () => {
+        const idx = portfolio.positions.findIndex(p => p.symbol === symbol);
+        if (idx === -1) return;
+        closeDetailPanel();
+        await removePosition(idx);
+      });
+    }
     return;
   }
 

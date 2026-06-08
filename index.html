@@ -320,6 +320,32 @@
     .add-form input:focus { border-color: var(--accent); }
     .add-form .btn-small { padding: 6px 14px; font-size: 11px; }
 
+    /* Delete mode: + button active, Chg% column becomes red X delete button */
+    .row-delete-btn {
+      display: none;
+      width: 24px;
+      height: 24px;
+      margin-left: auto;
+      border: 1px solid var(--red);
+      background: rgba(239,83,80,0.1);
+      color: var(--red);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .row-delete-btn:hover {
+      background: var(--red);
+      color: white;
+    }
+    body.delete-mode .row-chg { display: none; }
+    body.delete-mode .row-chgpct { display: none; }
+    body.delete-mode .row-delete-btn { display: flex; }
+    body.delete-mode .row-main { cursor: default; }
+
     /* Bottom bar */
     .bottom-bar {
       position: fixed;
