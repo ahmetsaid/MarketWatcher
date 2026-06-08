@@ -732,7 +732,7 @@
           <th>Strike</th>
           <th>Expiration</th>
           <th>Shares</th>
-          <th>Premium Received ($)</th>
+          <th id="th-premium">Premium Received ($)</th>
           <th>Live Price ($/sh)</th>
           <th>Current Value ($)</th>
           <th>Net P/L ($)</th>
@@ -742,17 +742,30 @@
       </thead>
       <tbody id="portfolio-tbody"></tbody>
       <tfoot>
-        <tr class="totals" id="totals-row">
-          <td>TOTAL</td>
+        <tr class="totals totals-short" id="totals-short" style="display:none;">
+          <td>SHORT (CC/CSP)</td>
           <td></td>
           <td></td>
           <td></td>
-          <td id="t-shares">0</td>
-          <td id="t-prim">$0.00</td>
+          <td id="ts-shares">0</td>
+          <td id="ts-prim">$0.00</td>
           <td></td>
-          <td id="t-value">$0.00</td>
-          <td id="t-netkz">$0.00</td>
-          <td id="t-rollcost">$0.00</td>
+          <td id="ts-value">$0.00</td>
+          <td id="ts-netkz">$0.00</td>
+          <td id="ts-rollcost">$0.00</td>
+          <td></td>
+        </tr>
+        <tr class="totals totals-long" id="totals-long" style="display:none;">
+          <td>LONG (Call/Put)</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td id="tl-shares">0</td>
+          <td id="tl-prim">$0.00</td>
+          <td></td>
+          <td id="tl-value">$0.00</td>
+          <td id="tl-netkz">$0.00</td>
+          <td>—</td>
           <td></td>
         </tr>
       </tfoot>

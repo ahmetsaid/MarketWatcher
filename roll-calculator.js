@@ -182,34 +182,56 @@ function renderPortfolio() {
   const tbody = $('portfolio-tbody');
   tbody.innerHTML = '';
   state.portfolio.forEach((p, idx) => {
+    const pType = p.type && TYPE_META[p.type] ? p.type : 'CC';
+    const meta = TYPE_META[pType];
     const tr = document.createElement('tr');
-    const netKz = (p.premReceived || 0) - (p.currentValue || 0);
+    // Type-aware Net P/L:
+    //   short: premium received − current cost (positive = option cheap, you profit)
+    //   long : current value − premium paid (positive = option appreciated)
+    const netKz = meta.short
+      ? (p.premReceived || 0) - (p.currentValue || 0)
+      : (p.currentValue || 0) - (p.premReceived || 0);
+    // For longs force roll cost to 0 (no auto-estimate, no manual entry)
+    if (!meta.short) p.rollCostEst = 0;
     const askDisplay = (p.askPerShare != null && p.askPerShare > 0)
       ? `<span class="ask-live" title="${p.askUpdatedAt ? 'Updated ' + new Date(p.askUpdatedAt).toLocaleTimeString() : ''}">${p.askPerShare.toFixed(2)}</span>`
       : `<span class="ask-empty">—</span>`;
-    const pType = p.type && TYPE_META[p.type] ? p.type : 'CC';
     const typeOpts = Object.keys(TYPE_META).map(t =>
       `<option value="${t}" ${t === pType ? 'selected' : ''} title="${TYPE_META[t].title}">${TYPE_META[t].label}</option>`
     ).join('');
-    const typeClass = TYPE_META[pType].short ? 'type-short' : 'type-long';
+    const typeClass = meta.short ? 'type-short' : 'type-long';
+    const premTitle = meta.short ? 'Premium received (credit at open)' : 'Premium paid (debit at open)';
+    const rollCostCell = meta.short
+      ? `<input type="number" step="0.01" data-idx="${idx}" data-k="rollCostEst" value="${p.rollCostEst || 0}">`
+      : `<input type="number" data-idx="${idx}" data-k="rollCostEst" value="0" readonly title="Not applicable for long positions" style="color:var(--text-dim); opacity:0.55; cursor:not-allowed;">`;
     tr.innerHTML = `
       <td><input type="text" data-idx="${idx}" data-k="symbol" value="${escapeHtml(p.symbol || '')}"></td>
-      <td><select class="type-select ${typeClass}" data-idx="${idx}" data-k="type" title="${TYPE_META[pType].title}">${typeOpts}</select></td>
+      <td><select class="type-select ${typeClass}" data-idx="${idx}" data-k="type" title="${meta.title}">${typeOpts}</select></td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="strike" value="${p.strike || 0}"></td>
       <td><input type="date" data-idx="${idx}" data-k="expiration" value="${p.expiration || ''}"></td>
       <td><input type="number" step="1" data-idx="${idx}" data-k="shares" value="${p.shares || 0}"></td>
-      <td><input type="number" step="0.01" data-idx="${idx}" data-k="premReceived" value="${p.premReceived || 0}"></td>
+      <td><input type="number" step="0.01" data-idx="${idx}" data-k="premReceived" value="${p.premReceived || 0}" title="${premTitle}"></td>
       <td class="ask-cell">${askDisplay}</td>
       <td><input type="number" step="0.01" data-idx="${idx}" data-k="currentValue" value="${p.currentValue || 0}"></td>
       <td class="${netKz >= 0 ? 'positive' : 'negative'}">${fmt(netKz)}</td>
-      <td><input type="number" step="0.01" data-idx="${idx}" data-k="rollCostEst" value="${p.rollCostEst || 0}"></td>
+      <td>${rollCostCell}</td>
       <td style="white-space:nowrap;">
-        <button class="refresh-btn" data-refresh="${idx}" title="Fetch live ask">&#8635;</button>
+        <button class="refresh-btn" data-refresh="${idx}" title="Fetch live price">&#8635;</button>
         <button class="del-btn" data-del="${idx}" title="Remove">✕</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
+
+  // Dynamic premium header based on portfolio mix
+  const hasShort = state.portfolio.some(p => (TYPE_META[p.type] || TYPE_META.CC).short);
+  const hasLong  = state.portfolio.some(p => !(TYPE_META[p.type] || TYPE_META.CC).short);
+  const premHeader = $('th-premium');
+  if (premHeader) {
+    if (hasLong && !hasShort) premHeader.textContent = 'Premium Paid ($)';
+    else if (hasShort && hasLong) premHeader.textContent = 'Premium ($)';
+    else premHeader.textContent = 'Premium Received ($)';
+  }
   tbody.querySelectorAll('input').forEach(inp => {
     inp.addEventListener('input', (e) => {
       const i = parseInt(e.target.dataset.idx, 10);
@@ -276,33 +298,31 @@ async function refreshRow(idx) {
     p.askUpdatedAt = Date.now();
     p.currentValue = Math.round(perShare * (p.shares || 0) * 100) / 100;
 
-    // Also estimate Roll Cost: fetch same-strike option N weeks further out.
-    //   Short: est = (ask_now − bid_new) × shares  (positive = debit roll)
-    //   Long : est = (ask_new − bid_now) × shares
-    const weeks = state.rollTargetWeeks || 1;
-    const targetExp = addWeeksToDate(p.expiration, weeks);
-    if (targetExp) {
-      try {
-        const q2 = await window.api.fetchOptionQuote({
-          symbol: p.symbol,
-          expDate: targetExp,
-          strike: parseFloat(p.strike),
-          type: meta.side,
-        });
-        if (q2 && !q2.error) {
-          let est = 0;
-          if (meta.short) {
+    // Roll Cost estimate — shorts (CC/CSP) only.  Longs have no meaningful
+    // "roll" here; we leave rollCostEst at 0 per requirement.
+    if (meta.short) {
+      const weeks = state.rollTargetWeeks || 1;
+      const targetExp = addWeeksToDate(p.expiration, weeks);
+      if (targetExp) {
+        try {
+          const q2 = await window.api.fetchOptionQuote({
+            symbol: p.symbol,
+            expDate: targetExp,
+            strike: parseFloat(p.strike),
+            type: meta.side,
+          });
+          if (q2 && !q2.error) {
             const newBid = (q2.bid && q2.bid > 0) ? q2.bid : (q2.last || 0);
-            est = (perShare - newBid) * (p.shares || 0);
-          } else {
-            const newAsk = (q2.ask && q2.ask > 0) ? q2.ask : (q2.last || 0);
-            est = (newAsk - perShare) * (p.shares || 0);
+            const est = (perShare - newBid) * (p.shares || 0);
+            p.rollCostEst = Math.round(est * 100) / 100;
+            p.rollTargetExp = q2.matchedExpiration || null;
+            p.rollTargetWeeks = weeks;
           }
-          p.rollCostEst = Math.round(est * 100) / 100;
-          p.rollTargetExp = q2.matchedExpiration || null;
-          p.rollTargetWeeks = weeks;
-        }
-      } catch { /* keep manual value on failure */ }
+        } catch { /* keep manual value on failure */ }
+      }
+    } else {
+      p.rollCostEst = 0;
+      p.rollTargetExp = null;
     }
     // Keep matched strike if Yahoo snapped it
     if (q.matchedStrike && Math.abs(q.matchedStrike - parseFloat(p.strike)) > 0.001) {
@@ -350,41 +370,75 @@ async function refreshAll() {
 
 function renderPortfolioTotals() {
   const costBasis = num('costBasis');
-  let totShares = 0, totPrim = 0, totValue = 0, totNetKz = 0, totRollCost = 0, totAssignProceeds = 0;
+
+  // SHORT group (CC/CSP) — these feed Assignment Analysis / NET PROFIT cards
+  let sShares = 0, sPrim = 0, sValue = 0, sNetKz = 0, sRollCost = 0, sAssignProceeds = 0;
+  // LONG group (Call/Put) — excluded from assignment aggregates per requirement
+  let lShares = 0, lPrim = 0, lValue = 0, lNetKz = 0;
+  let sCount = 0, lCount = 0;
+
   for (const p of state.portfolio) {
+    const meta = TYPE_META[p.type] || TYPE_META.CC;
     const sh = p.shares || 0;
-    totShares += sh;
-    totPrim += p.premReceived || 0;
-    totValue += p.currentValue || 0;
-    totNetKz += (p.premReceived || 0) - (p.currentValue || 0);
-    totRollCost += p.rollCostEst || 0;
-    totAssignProceeds += (p.strike || 0) * sh;
+    const prem = p.premReceived || 0;
+    const cv = p.currentValue || 0;
+    if (meta.short) {
+      sShares += sh;
+      sPrim += prem;
+      sValue += cv;
+      sNetKz += prem - cv;
+      sRollCost += p.rollCostEst || 0;
+      sAssignProceeds += (p.strike || 0) * sh;
+      sCount++;
+    } else {
+      lShares += sh;
+      lPrim += prem;
+      lValue += cv;
+      lNetKz += cv - prem;  // long formula: current − paid
+      lCount++;
+    }
   }
-  const totCostBasis = costBasis * totShares;
-  const netKarAssign = (totAssignProceeds - totCostBasis) + totPrim;
-  const netKarRoll = netKarAssign - totRollCost;
 
-  $('t-shares').textContent = totShares.toLocaleString();
-  $('t-prim').textContent = fmt(totPrim);
-  $('t-value').textContent = fmt(totValue);
-  $('t-netkz').textContent = fmt(totNetKz);
-  $('t-netkz').className = totNetKz >= 0 ? 'positive' : 'negative';
-  $('t-rollcost').textContent = fmt(totRollCost);
+  // Show/hide subtotal rows
+  $('totals-short').style.display = sCount > 0 ? '' : 'none';
+  $('totals-long').style.display  = lCount > 0 ? '' : 'none';
 
-  $('s-assign-gelir').textContent = fmt(totAssignProceeds);
+  // SHORT subtotal row
+  if (sCount > 0) {
+    $('ts-shares').textContent = sShares.toLocaleString();
+    $('ts-prim').textContent = fmt(sPrim);
+    $('ts-value').textContent = fmt(sValue);
+    $('ts-netkz').textContent = fmt(sNetKz);
+    $('ts-netkz').className = sNetKz >= 0 ? 'positive' : 'negative';
+    $('ts-rollcost').textContent = fmt(sRollCost);
+  }
+  // LONG subtotal row
+  if (lCount > 0) {
+    $('tl-shares').textContent = lShares.toLocaleString();
+    $('tl-prim').textContent = fmt(lPrim);
+    $('tl-value').textContent = fmt(lValue);
+    $('tl-netkz').textContent = fmt(lNetKz);
+    $('tl-netkz').className = lNetKz >= 0 ? 'positive' : 'negative';
+  }
+
+  // Assignment-based summary cards — SHORTS ONLY (longs excluded)
+  const totCostBasis = costBasis * sShares;
+  const netKarAssign = (sAssignProceeds - totCostBasis) + sPrim;
+  const netKarRoll = netKarAssign - sRollCost;
+
+  $('s-assign-gelir').textContent = fmt(sAssignProceeds);
   $('s-maliyet-bazi').textContent = fmt(totCostBasis);
-  $('s-roll-maliyet').textContent = fmt(totRollCost);
+  $('s-roll-maliyet').textContent = fmt(sRollCost);
   $('s-net-roll').textContent = fmt(netKarRoll);
   $('s-net-assign').textContent = fmt(netKarAssign);
 
-  // Breakdowns — show only when we have positions
-  const stockGain = totAssignProceeds - totCostBasis;
-  const hasData = totShares > 0;
+  const stockGain = sAssignProceeds - totCostBasis;
+  const hasData = sShares > 0;
   $('s-net-assign-bd').innerHTML = hasData
-    ? `<span class="${stockGain >= 0 ? 'plus' : 'minus'}">${stockGain >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockGain))}</span> stock <span class="plus">+${fmtBd(totPrim)}</span> prem`
+    ? `<span class="${stockGain >= 0 ? 'plus' : 'minus'}">${stockGain >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockGain))}</span> stock <span class="plus">+${fmtBd(sPrim)}</span> prem`
     : '';
   $('s-net-roll-bd').innerHTML = hasData
-    ? `<span class="${stockGain >= 0 ? 'plus' : 'minus'}">${stockGain >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockGain))}</span> stock <span class="plus">+${fmtBd(totPrim)}</span> prem <span class="${totRollCost > 0 ? 'minus' : ''}">${totRollCost > 0 ? '−' + fmtBd(totRollCost) : '$0'}</span> roll`
+    ? `<span class="${stockGain >= 0 ? 'plus' : 'minus'}">${stockGain >= 0 ? '+' : '−'}${fmtBd(Math.abs(stockGain))}</span> stock <span class="plus">+${fmtBd(sPrim)}</span> prem <span class="${sRollCost > 0 ? 'minus' : ''}">${sRollCost > 0 ? '−' + fmtBd(sRollCost) : '$0'}</span> roll`
     : '';
 }
 

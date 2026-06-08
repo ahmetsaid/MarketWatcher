@@ -24,6 +24,8 @@ let tray = null;
 function createWindow() {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
 
+  const isMac = process.platform === 'darwin';
+
   mainWindow = new BrowserWindow({
     width: 340,
     height: 560,
@@ -35,6 +37,9 @@ function createWindow() {
     resizable: false,
     skipTaskbar: false,
     backgroundColor: '#0a0e17',
+    // macOS: hide traffic lights but keep native window controls accessible via app menu
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    trafficLightPosition: isMac ? { x: -100, y: -100 } : undefined, // hide off-screen
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
