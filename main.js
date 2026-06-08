@@ -5,6 +5,7 @@ const fs = require('fs');
 const USER_DATA = app.getPath('userData');
 const PORTFOLIO_PATH = path.join(USER_DATA, 'portfolio.json');
 const SETTINGS_PATH = path.join(USER_DATA, 'settings.json');
+const ROLLS_PATH = path.join(USER_DATA, 'rolls.json');
 
 const DEFAULT_SETTINGS = {
   refreshInterval: 30,
@@ -17,10 +18,13 @@ const DEFAULT_SETTINGS = {
   chartRange: '1d',
 };
 let mainWindow = null;
+let rollWindow = null;
 let tray = null;
 
 function createWindow() {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
+
+  const isMac = process.platform === 'darwin';
 
   mainWindow = new BrowserWindow({
     width: 340,
@@ -33,6 +37,9 @@ function createWindow() {
     resizable: false,
     skipTaskbar: false,
     backgroundColor: '#0a0e17',
+    // macOS: hide traffic lights but keep native window controls accessible via app menu
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    trafficLightPosition: isMac ? { x: -100, y: -100 } : undefined, // hide off-screen
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -42,6 +49,31 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
   mainWindow.on('closed', () => { mainWindow = null; });
+}
+
+function createRollWindow() {
+  if (rollWindow) {
+    rollWindow.show();
+    rollWindow.focus();
+    return;
+  }
+  rollWindow = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    minWidth: 900,
+    minHeight: 640,
+    frame: false,
+    alwaysOnTop: false,
+    backgroundColor: '#131722',
+    title: 'Options Roll Calculator',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  rollWindow.loadFile('roll-calculator.html');
+  rollWindow.on('closed', () => { rollWindow = null; });
 }
 
 function createTray() {
@@ -58,6 +90,11 @@ function createTray() {
     {
       label: 'Open portfolio.json',
       click: () => { shell.openPath(PORTFOLIO_PATH); },
+    },
+    { type: 'separator' },
+    {
+      label: 'Roll Calculator',
+      click: () => { createRollWindow(); },
     },
     { type: 'separator' },
     {
@@ -142,6 +179,55 @@ ipcMain.handle('load-settings', () => {
 
 ipcMain.handle('save-settings', (_event, data) => {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(data, null, 2));
+  return true;
+});
+
+// --- Rolls (Options Roll Calculator) ---
+ipcMain.handle('load-rolls', () => {
+  try {
+    const data = fs.readFileSync(ROLLS_PATH, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    const defaults = {
+      current: {
+        symbol: 'SOXL',
+        positionType: 'cc',
+        strike: 0,
+        expiration: '',
+        shares: 100,
+        originalPremium: 0,
+        currentAsk: 0,
+        costBasis: 54.50,
+      },
+      target: { newStrike: 0, newExpiration: '', newPremium: 0 },
+      portfolio: [],
+      alwaysOnTop: false,
+    };
+    fs.writeFileSync(ROLLS_PATH, JSON.stringify(defaults, null, 2));
+    return defaults;
+  }
+});
+
+ipcMain.handle('save-rolls', (_event, data) => {
+  fs.writeFileSync(ROLLS_PATH, JSON.stringify(data, null, 2));
+  return true;
+});
+
+ipcMain.handle('open-roll-window', () => { createRollWindow(); return true; });
+
+ipcMain.handle('roll-set-always-on-top', (_event, value) => {
+  if (rollWindow) rollWindow.setAlwaysOnTop(!!value);
+  return true;
+});
+
+ipcMain.handle('roll-window-control', (_event, action) => {
+  if (!rollWindow) return false;
+  if (action === 'minimize') rollWindow.minimize();
+  else if (action === 'close') rollWindow.close();
+  else if (action === 'maximize') {
+    if (rollWindow.isMaximized()) rollWindow.unmaximize();
+    else rollWindow.maximize();
+  }
   return true;
 });
 
@@ -450,6 +536,132 @@ function computeScore(d, isETF = false) {
   return { score, breakdown, maxScore };
 }
 
+function buildOptionsFromChain(opt) {
+  const oc = opt && opt.optionChain && opt.optionChain.result && opt.optionChain.result[0];
+  if (!oc || !oc.options || !oc.options.length) return null;
+  const expDates = oc.expirationDates || [];
+  const under = oc.quote ? oc.quote.regularMarketPrice : null;
+  const chain = oc.options[0];
+  const exp = chain.expirationDate;
+  const calls = chain.calls || [];
+  const puts = chain.puts || [];
+
+  const findATM = (arr) => arr.length && under
+    ? arr.reduce((best, c) => Math.abs(c.strike - under) < Math.abs(best.strike - under) ? c : best)
+    : null;
+  const ccTarget = under ? under * 1.05 : Infinity;
+  const ccCall = calls.filter(c => c.strike >= ccTarget).sort((a, b) => a.strike - b.strike)[0]
+              || calls.sort((a, b) => b.strike - a.strike)[0];
+  const cspTarget = under ? under * 0.95 : 0;
+  const cspPut = puts.filter(p => p.strike <= cspTarget).sort((a, b) => b.strike - a.strike)[0]
+              || puts.sort((a, b) => a.strike - b.strike)[0];
+
+  const atmCall = findATM(calls);
+  const atmPut = findATM(puts);
+
+  const callVol = calls.reduce((s, c) => s + (c.volume || 0), 0);
+  const putVol = puts.reduce((s, p) => s + (p.volume || 0), 0);
+  const pcRatio = callVol > 0 ? putVol / callVol : null;
+
+  const iv = atmCall && atmCall.impliedVolatility ? atmCall.impliedVolatility * 100 : null;
+
+  const fmtOpt = (o) => o ? {
+    strike: o.strike,
+    bid: o.bid,
+    ask: o.ask,
+    last: o.lastPrice,
+    volume: o.volume || 0,
+    openInterest: o.openInterest || 0,
+    iv: o.impliedVolatility ? o.impliedVolatility * 100 : null,
+  } : null;
+
+  const daysToExp = Math.max(1, Math.round((exp - Date.now() / 1000) / 86400));
+  const ccReturn = ccCall && ccCall.bid > 0 && under ? (ccCall.bid / under) * (365 / daysToExp) * 100 : null;
+  const cspReturn = cspPut && cspPut.bid > 0 ? (cspPut.bid / cspPut.strike) * (365 / daysToExp) * 100 : null;
+
+  return {
+    expiration: exp,
+    daysToExp,
+    underlying: under,
+    iv,
+    pcRatio,
+    atmCall: fmtOpt(atmCall),
+    atmPut: fmtOpt(atmPut),
+    ccCall: fmtOpt(ccCall),
+    cspPut: fmtOpt(cspPut),
+    ccAnnualReturn: ccReturn,
+    cspAnnualReturn: cspReturn,
+    expirationCount: expDates.length,
+    expirationDates: expDates,
+  };
+}
+
+ipcMain.handle('fetch-options-for-date', async (_event, symbol, timestamp) => {
+  try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?date=${timestamp}`;
+    const opt = await fetchJSONAuth(url);
+    return buildOptionsFromChain(opt);
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+// Fetch quote for a specific option contract (for Roll Calculator portfolio refresh)
+ipcMain.handle('fetch-option-quote', async (_event, { symbol, expDate, strike, type }) => {
+  try {
+    if (!symbol || !expDate || !strike) return { error: 'Missing args' };
+    const baseUrl = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`;
+    const base = await fetchJSONAuth(baseUrl);
+    const oc = base && base.optionChain && base.optionChain.result && base.optionChain.result[0];
+    if (!oc || !oc.expirationDates || !oc.expirationDates.length) return { error: 'No option chain' };
+
+    // Pick the Yahoo expiration closest to user's date (interpret as 16:00 ET ≈ 20:00 UTC)
+    const targetTs = Math.floor(new Date(expDate + 'T20:00:00Z').getTime() / 1000);
+    let bestExp = oc.expirationDates[0];
+    let bestDiff = Math.abs(bestExp - targetTs);
+    for (const d of oc.expirationDates) {
+      const diff = Math.abs(d - targetTs);
+      if (diff < bestDiff) { bestDiff = diff; bestExp = d; }
+    }
+
+    // Use base chain if it matches; otherwise fetch the specific expiration
+    let chain = (oc.options && oc.options[0]) || null;
+    if (!chain || chain.expirationDate !== bestExp) {
+      const resp = await fetchJSONAuth(baseUrl + `?date=${bestExp}`);
+      const oc2 = resp && resp.optionChain && resp.optionChain.result && resp.optionChain.result[0];
+      chain = oc2 && oc2.options && oc2.options[0];
+      if (!chain) return { error: 'No chain for expiration' };
+    }
+
+    const arr = type === 'put' ? (chain.puts || []) : (chain.calls || []);
+    if (!arr.length) return { error: 'No contracts at expiration' };
+
+    // Nearest-strike match
+    let best = arr[0];
+    let bestStrikeDiff = Math.abs(best.strike - strike);
+    for (const o of arr) {
+      const diff = Math.abs(o.strike - strike);
+      if (diff < bestStrikeDiff) { bestStrikeDiff = diff; best = o; }
+    }
+
+    return {
+      symbol,
+      type,
+      matchedExpiration: chain.expirationDate,
+      matchedStrike: best.strike,
+      bid: best.bid || 0,
+      ask: best.ask || 0,
+      last: best.lastPrice || 0,
+      volume: best.volume || 0,
+      openInterest: best.openInterest || 0,
+      iv: best.impliedVolatility ? best.impliedVolatility * 100 : null,
+      underlying: oc.quote ? oc.quote.regularMarketPrice : null,
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 ipcMain.handle('fetch-details', async (_event, symbol) => {
   try {
     // 1. Chart 1y for prices, volumes, returns, RSI, MA
@@ -543,68 +755,7 @@ ipcMain.handle('fetch-details', async (_event, symbol) => {
     let options = null;
     try {
       const opt = await fetchJSONAuth(`https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`);
-      const oc = opt.optionChain && opt.optionChain.result && opt.optionChain.result[0];
-      if (oc && oc.options && oc.options.length) {
-        const expDates = oc.expirationDates || [];
-        const under = oc.quote.regularMarketPrice;
-        const chain = oc.options[0];
-        const exp = chain.expirationDate;
-        const calls = chain.calls || [];
-        const puts = chain.puts || [];
-
-        const findATM = (arr) => arr.length
-          ? arr.reduce((best, c) => Math.abs(c.strike - under) < Math.abs(best.strike - under) ? c : best)
-          : null;
-        // Nearest OTM call >= 5% above price (Covered Call target)
-        const ccTarget = under * 1.05;
-        const ccCall = calls.filter(c => c.strike >= ccTarget).sort((a, b) => a.strike - b.strike)[0]
-                    || calls.sort((a, b) => b.strike - a.strike)[0];
-        // Nearest OTM put <= 5% below price (CSP target)
-        const cspTarget = under * 0.95;
-        const cspPut = puts.filter(p => p.strike <= cspTarget).sort((a, b) => b.strike - a.strike)[0]
-                    || puts.sort((a, b) => a.strike - b.strike)[0];
-
-        const atmCall = findATM(calls);
-        const atmPut = findATM(puts);
-
-        // Volume-weighted put/call ratio
-        const callVol = calls.reduce((s, c) => s + (c.volume || 0), 0);
-        const putVol = puts.reduce((s, p) => s + (p.volume || 0), 0);
-        const pcRatio = callVol > 0 ? putVol / callVol : null;
-
-        // IV from ATM
-        const iv = atmCall && atmCall.impliedVolatility ? atmCall.impliedVolatility * 100 : null;
-
-        const fmtOpt = (o) => o ? {
-          strike: o.strike,
-          bid: o.bid,
-          ask: o.ask,
-          last: o.lastPrice,
-          volume: o.volume || 0,
-          openInterest: o.openInterest || 0,
-          iv: o.impliedVolatility ? o.impliedVolatility * 100 : null,
-        } : null;
-
-        // Estimated % return for CC and CSP (annualized)
-        const daysToExp = Math.max(1, Math.round((exp - Date.now() / 1000) / 86400));
-        const ccReturn = ccCall && ccCall.bid > 0 ? (ccCall.bid / under) * (365 / daysToExp) * 100 : null;
-        const cspReturn = cspPut && cspPut.bid > 0 ? (cspPut.bid / cspPut.strike) * (365 / daysToExp) * 100 : null;
-
-        options = {
-          expiration: exp,
-          daysToExp,
-          underlying: under,
-          iv,
-          pcRatio,
-          atmCall: fmtOpt(atmCall),
-          atmPut: fmtOpt(atmPut),
-          ccCall: fmtOpt(ccCall),
-          cspPut: fmtOpt(cspPut),
-          ccAnnualReturn: ccReturn,
-          cspAnnualReturn: cspReturn,
-          expirationCount: expDates.length,
-        };
-      }
+      options = buildOptionsFromChain(opt);
     } catch { /* options unavailable (not all symbols have options) */ }
 
     const scoreData = {

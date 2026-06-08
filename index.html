@@ -120,6 +120,8 @@
     }
     .titlebar-btn:hover { background: var(--bg-row-hover); color: var(--text); }
     .titlebar-btn.active { color: var(--accent); }
+    #btnRoll { background: #5a1515; color: #e6a0a0; }
+    #btnRoll:hover { background: #7a1c1c; color: #ffdede; }
 
     /* ============ WATCHLIST VIEW ============ */
     .view-watchlist, .view-settings { display: none; }
@@ -655,6 +657,42 @@
     }
     .options-meta span strong { color: var(--text); font-weight: 600; }
 
+    .exp-chips {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .exp-chip {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 4px 0;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.12s;
+    }
+    .exp-chip:hover {
+      background: var(--bg-row-hover);
+      color: var(--text);
+      border-color: var(--text-dim);
+    }
+    .exp-chip.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .exp-chip:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
     .opt-strategy {
       padding: 8px 0;
       border-bottom: 1px solid var(--border);
@@ -896,6 +934,7 @@
     <div class="titlebar-actions">
       <button class="titlebar-btn" id="btnAdd" title="Add symbol">+</button>
       <button class="titlebar-btn" id="btnRefresh" title="Refresh">&#8635;</button>
+      <button class="titlebar-btn" id="btnRoll" title="Roll Calculator">&#8644;</button>
       <button class="titlebar-btn" id="btnSettings" title="Settings">&#9881;</button>
     </div>
   </div>

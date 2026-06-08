@@ -6,7 +6,9 @@
   "author": "MarketTracker",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder --win --mac"
   },
   "build": {
     "appId": "com.markettracker.app",
@@ -19,11 +21,26 @@
       "oneClick": true,
       "perMachine": false
     },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.finance",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "writeUpdateInfo": false
+    },
     "files": [
       "main.js",
       "preload.js",
       "renderer.js",
       "index.html",
+      "roll-calculator.html",
+      "roll-calculator.js",
       "portfolio.json",
       "settings.json"
     ],
