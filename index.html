@@ -143,6 +143,9 @@
       overflow-y: auto;
       max-height: 460px;
     }
+    /* When add form is open, rows-container is pushed down — shrink it so
+       last rows don't slip behind the fixed bottom bar. */
+    body.delete-mode .rows-container { max-height: 388px; }
     .rows-container::-webkit-scrollbar { width: 3px; }
     .rows-container::-webkit-scrollbar-track { background: transparent; }
     .rows-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
